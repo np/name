@@ -1,4 +1,5 @@
-packages: discrimination/*.cabal
+packages:
+  .
 package name
 documentation: False
 jobs: $ncpus
