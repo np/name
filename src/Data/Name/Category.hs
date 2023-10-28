@@ -8,6 +8,9 @@
 {-# language RankNTypes #-}
 {-# language DeriveFunctor #-}
 {-# language DeriveGeneric #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE InstanceSigs #-}
 
 ---------------------------------------------------------------------------------
 -- |
@@ -31,7 +34,6 @@ import Data.Kind
 import Data.Void
 import Data.Name.Class
 import Data.Name.Support
-import Data.Name.Type
 import qualified Prelude
 import Prelude
   ( Either(..)
@@ -41,12 +43,13 @@ import Prelude
   , Foldable(foldMap)
   , Monoid(..), Semigroup(..)
   )
+import Data.Name.Type (Name)
 
 type (+) = Either
 
-data Nom a b = Nom Support (a -> b)
+data Nom n a b = Nom (Support n) (a -> b)
 
-data Op k a b = Op { getOp :: k b a }
+newtype Op k a b = Op { getOp :: k b a }
   deriving (Eq,Ord,Show,Read,Generic)
 
 data Core k a b = Core { fwd :: k a b, bwd :: k b a }
@@ -55,7 +58,7 @@ data Core k a b = Core { fwd :: k a b, bwd :: k b a }
 invCore :: Core k a b -> Core k b a
 invCore (Core f g) = Core g f
 
-instance Category Nom where
+instance IsName n => Category (Nom n) where
   id = Nom mempty id
   {-# inline id #-}
   Nom s f . Nom t g = Nom (s<>t) (f.g)
@@ -73,34 +76,30 @@ instance Category k => Category (Core k) where
   Core f g . Core h i = Core (f . h) (i . g)
   {-# inline (.) #-}
 
-instance (Permutable a, Permutable b) => Permutable (Nom a b) where
+instance (Permutable n a, Permutable n b) => Permutable n (Nom n a b) where
   trans i j (Nom s f) = Nom (trans i j s) (trans i j f)
   perm p (Nom s f) = Nom (perm p s) (perm p f)
 
-instance (Permutable a, Permutable b) => Nominal (Nom a b) where
+instance (Permutable n a, Permutable n b) => Nominal n (Nom n a b) where
   a # Nom s _ = a # s
   supp (Nom s _) = s
   supply (Nom s _) = supply s
   equiv (Nom s _) = equiv s
 
-instance Permutable (k b a) => Permutable (Op (k :: * -> * -> *) a b)
-instance Nominal (k b a) => Nominal (Op (k :: * -> * -> *) a b)
+instance Permutable n (k b a) => Permutable n (Op (k :: * -> * -> *) a b)
+instance Nominal n (k b a) => Nominal n (Op (k :: * -> * -> *) a b)
 
-instance (Permutable (k a b), Permutable (k b a)) => Permutable (Core k a b)
-instance (Nominal (k a b), Nominal (k b a)) => Nominal (Core k a b)
+instance (Permutable n (k a b), Permutable n (k b a)) => Permutable n (Core k a b)
+instance (Nominal n (k a b), Nominal n (k b a)) => Nominal n (Core k a b)
 
-sepNom :: Name -> Nom a b -> Bool
+sepNom :: IsName n => Name n -> Nom n a b -> Bool
 sepNom a (Nom s _) = a # s
 
-suppNom :: Nom a b -> Support
+suppNom :: Nom n a b -> Support n
 suppNom (Nom s _) = s
 
-runNom :: Nom a b -> a -> b
+runNom :: Nom n a b -> a -> b
 runNom (Nom _ f) = f
-
--- unsafe
-nom_ :: N k => (a -> b) -> k a b
-nom_ = nom mempty
 
 class Category k => MonoidalP k where
   (***)   :: k a b -> k c d -> k (a,c) (b,d)
@@ -136,26 +135,27 @@ instance MonoidalP (->) where
   rcounit = Prelude.fst
   {-# inline rcounit #-}
 
-instance MonoidalP Nom where
+instance IsName n => MonoidalP (Nom n) where
   Nom s f *** Nom t g = Nom (s <> t) (f *** g)
   {-# inline (***) #-}
   first (Nom s f) = Nom s (first f)
   {-# inline first #-}
   second (Nom s f) = Nom s (second f)
   {-# inline second #-}
-  swapP = nom_ swapP
+  swapP :: IsName n => Nom n (a, b) (b, a)
+  swapP = nom (mempty :: Support n) swapP
   {-# inline swapP #-}
-  lassocP = nom_ lassocP
+  lassocP = nom (mempty :: Support n) lassocP
   {-# inline lassocP #-}
-  rassocP = nom_ rassocP
+  rassocP = nom (mempty :: Support n) rassocP
   {-# inline rassocP #-}
-  lunit = nom_ lunit
+  lunit = nom (mempty :: Support n) lunit
   {-# inline lunit #-}
-  lcounit = nom_ lcounit
+  lcounit = nom (mempty :: Support n) lcounit
   {-# inline lcounit #-}
-  runit = nom_ runit
+  runit = nom (mempty :: Support n) runit
   {-# inline runit #-}
-  rcounit = nom_ rcounit
+  rcounit = nom (mempty :: Support n) rcounit
   {-# inline rcounit #-}
 
 instance MonoidalP k => MonoidalP (Op k) where
@@ -222,14 +222,14 @@ instance Cartesian (->) where
   it _ = ()
   {-# inline it #-}
 
-instance Cartesian Nom where
-  exl = nom_ exl
+instance IsName n => Cartesian (Nom n) where
+  exl = nom (mempty :: Support n) exl
   {-# inline exl #-}
-  exr = nom_ exr
+  exr = nom (mempty :: Support n) exr
   {-# inline exr #-}
-  dup = nom_ dup
+  dup = nom (mempty :: Support n) dup
   {-# inline dup #-}
-  it = nom_ it
+  it = nom (mempty :: Support n) it
   {-# inline it #-}
 
 class Category k => MonoidalS k where
@@ -270,26 +270,26 @@ instance MonoidalS (->) where
   rcounitS = Left
   {-# inline rcounitS #-}
 
-instance MonoidalS Nom where
+instance IsName n => MonoidalS (Nom n) where
   Nom s f +++ Nom t g = Nom (s <> t) (f +++ g)
   {-# INLINE (+++) #-}
   left (Nom s f) = Nom s (left f)
   {-# INLINE left #-}
   right (Nom s f) = Nom s (right f)
   {-# INLINE right #-}
-  swapS = nom_ $ Prelude.either Right Left
+  swapS = nom (mempty :: Support n) $ Prelude.either Right Left
   {-# inline swapS #-}
-  lassocS = nom_ lassocS
+  lassocS = nom (mempty :: Support n) lassocS
   {-# inline lassocS #-}
-  rassocS = nom_ rassocS
+  rassocS = nom (mempty :: Support n) rassocS
   {-# inline rassocS #-}
-  lunitS = nom_ lunitS
+  lunitS = nom (mempty :: Support n) lunitS
   {-# inline lunitS #-}
-  lcounitS = nom_ lcounitS
+  lcounitS = nom (mempty :: Support n) lcounitS
   {-# inline lcounitS #-}
-  runitS = nom_ runitS
+  runitS = nom (mempty :: Support n) runitS
   {-# inline runitS #-}
-  rcounitS = nom_ rcounitS
+  rcounitS = nom (mempty :: Support n) rcounitS
   {-# inline rcounitS #-}
 
 instance MonoidalS k => MonoidalS (Op k) where
@@ -355,14 +355,14 @@ instance Cocartesian (->) where
   ti = absurd
   {-# inline ti #-}
 
-instance Cocartesian Nom where
-  inl = nom_ inl
+instance IsName n => Cocartesian (Nom n) where
+  inl = nom (mempty :: Support n) inl
   {-# inline inl #-}
-  inr = nom_ inr
+  inr = nom (mempty :: Support n) inr
   {-# inline inr #-}
-  jam = nom_ jam
+  jam = nom (mempty :: Support n) jam
   {-# inline jam #-}
-  ti = nom_ absurd
+  ti = nom (mempty :: Support n) absurd
   {-# inline ti #-}
 
 class (MonoidalP k, MonoidalS k) => DistributiveCategory k where
@@ -381,7 +381,7 @@ class (MonoidalP k, MonoidalS k) => OpDistributiveCategory k where
   {-# inline factorr #-}
 
 instance OpDistributiveCategory (->)
-instance OpDistributiveCategory Nom
+instance IsName n => OpDistributiveCategory (Nom n)
 
 instance DistributiveCategory (->) where
   distr (Left u,b) = Left (u,b)
@@ -391,10 +391,10 @@ instance DistributiveCategory (->) where
   distl (a,Right v) = Right (a,v)
   {-# inline distl #-}
 
-instance DistributiveCategory Nom where
-  distr = nom_ distr
+instance IsName n => DistributiveCategory (Nom n) where
+  distr = nom (mempty :: Support n) distr
   {-# inline distr #-}
-  distl = nom_ distl
+  distl = nom (mempty :: Support n) distl
   {-# inline distl #-}
 
 instance OpDistributiveCategory k => DistributiveCategory (Op k) where
@@ -445,9 +445,9 @@ instance CCC (->) where
   unitArrow = Prelude.const
   {-# inline unitArrow #-}
 
-instance CCC Nom where
-  type Ob Nom = Nominal
-  apply = nom_ (uncurry runNom)
+instance IsName n => CCC (Nom n) where
+  type Ob (Nom n) = Nominal n
+  apply = nom (mempty :: Support n) (uncurry runNom) -- is ok to loose the support of the function here?
   {-# inline apply #-}
   curry (Nom s f) = Nom s $ \a -> Nom (s <> supp a) $ \b -> f (a,b) -- note support of environment
   {-# inline curry #-}
@@ -458,42 +458,39 @@ instance CCC Nom where
   unitArrow = Nom mempty $ \a -> Nom (supp a) (unitArrow a)
   {-# inline unitArrow #-}
 
-niso_ :: NI k => (a -> b) -> (b -> a) -> k a b
-niso_ = niso mempty
+class (IsName n, DistributiveCategory k, OpDistributiveCategory k) => NI n k where
+  niso :: Support n -> (a -> b) -> (b -> a) -> k a b
 
-class (DistributiveCategory k, OpDistributiveCategory k) => NI k where
-  niso :: Support -> (a -> b) -> (b -> a) -> k a b
-
-instance NI (->) where
+instance IsName n => NI n (->) where
   niso _ f _ = f
 
-instance NI Nom where
+instance IsName n => NI n (Nom n) where
   niso s f _ = Nom s f
 
-instance NI k => NI (Op k) where
+instance NI n k => NI n (Op k) where
   niso s f g = Op (niso s g f)
 
-instance NI k => NI (Core k) where
+instance NI n k => NI n (Core k) where
   niso s f g = Core (niso s f g) (niso s g f)
 
-class (NI k, CCC k, Cocartesian k) => N k where
-  nom :: Support -> (a -> b) -> k a b
-  con :: p k -> (k ~ (->) => r) -> r -> r
-  nar :: ((a->b)->(c->d)) -> k a b -> k c d
+class (NI n k, CCC k, Cocartesian k) => N n k where
+  nom :: Support n -> (a -> b) -> k a b
+  con :: proxyn n -> proxyk k -> (k ~ (->) => r) -> r -> r
+  nar :: proxyn n -> ((a->b)->(c->d)) -> k a b -> k c d
 
-instance N (->) where
+instance IsName n => N n (->) where
   nom _ = id
   {-# inline nom #-}
-  con _ x _ = x
+  con _ _ x _ = x
   {-# inline con #-}
-  nar = id
+  nar _ = id
 
-instance N Nom where
+instance IsName n => N n (Nom n) where
   nom = Nom
   {-# inline conlike nom #-}
-  con _ _ x = x
+  con _ _ _ x = x
   {-# inline con #-}
-  nar k (Nom s f) = Nom s (k f)
+  nar _ k (Nom s f) = Nom s (k f)
 
 -- Nom is not a tensored category over Hask, so we don't get copowers in general, merely finite ones
 
@@ -523,19 +520,19 @@ type (⊙) = Tensor
 data Tensor v a = Tensor v a -- v should be 'invisible' within Nom, I give no Nom arrows for extracting it
   deriving (Eq, Functor)
 
-instance Permutable a => Permutable (Tensor v a) where
+instance Permutable n a => Permutable n (Tensor v a) where
   trans i j (Tensor v a) = Tensor v (trans i j a)
   {-# inline trans #-}
   perm p (Tensor v a) = Tensor v (perm p a) -- v many copies of a?
   {-# inline perm #-}
 
-instance Permutable1 (Tensor v) where
+instance IsName n => Permutable1 n (Tensor v) where
   trans1 f i j (Tensor v a) = Tensor v (f i j a)
   {-# inline trans1 #-}
   perm1 f p (Tensor v a) = Tensor v (f p a) -- v many copies of a?
   {-# inline perm1 #-}
 
-instance Nominal a => Nominal (Tensor v a) where
+instance Nominal n a => Nominal n (Tensor v a) where
   a # Tensor _ b = a # b
   {-# inline (#) #-}
   supp (Tensor _ a) = supp a
@@ -545,19 +542,19 @@ instance Nominal a => Nominal (Tensor v a) where
   equiv (Tensor _ a) = equiv a
   {-# inline equiv #-}
 
-instance Nominal1 (Tensor v) where
+instance IsName n => Nominal1 n (Tensor v) where
   supp1 f (Tensor _ a) = f a
   {-# inline supp1 #-}
   supply1 f (Tensor _ a) = f a
   {-# inline supply1 #-}
 
-instance (Eq a, Binding b) => Binding (Tensor a b) where
+instance (Eq a, Binding n b) => Binding n (Tensor a b) where
   binding (Tensor a b) (Tensor c d) = guard (a == c) *> binding b d
   {-# inline binding #-}
   bv (Tensor _ b) = bv b
   {-# inline bv #-}
 
-instance Eq a => Binding1 (Tensor a) where
+instance (IsName n, Eq a) => Binding1 n (Tensor a) where
   binding1 f (Tensor a b) (Tensor c d) = guard (a == c) *> f b d
   {-# inline binding1 #-}
   bv1 f (Tensor _ b) = f b
@@ -568,7 +565,7 @@ class Cartesian k => FinitelyTensored k where -- only needs closed monoidal
   tensor   :: k (v ⊙ a) b -> v -> k a b
   untensor :: Finite v => (v -> k a b) -> k (v ⊙ a) b
 
-instance FinitelyTensored Nom where
+instance IsName n => FinitelyTensored (Nom n) where
   mapTensor (Nom s f) = Nom s (fmap f)
   {-# inline mapTensor #-}
   tensor (Nom s f) = Nom s . tensor f
@@ -591,16 +588,16 @@ instance (Finite v, Eq a) => Eq (Power v a) where
   Power f == Power g = fmap f every == fmap g every
   {-# inline (==) #-}
 
-instance Permutable a => Permutable (Power v a) where
+instance Permutable n a => Permutable n (Power v a) where
   trans i j (Power f) = Power (trans i j . f)
   perm p (Power f) = Power (perm p . f)
   {-# inline perm #-}
 
-instance Permutable1 (Power v) where
+instance IsName n => Permutable1 n (Power v) where
   trans1 f i j (Power g) = Power (f i j . g)
   perm1 f p (Power g) = Power (f p . g)
 
-instance (Finite v, Nominal a) => Nominal (Power v a) where
+instance (Finite v, Nominal n a) => Nominal n (Power v a) where
   a # Power f = Prelude.all ((a #) . f) every
   {-# inline (#) #-}
   supp (Power f) = foldMap (supp . f) every
@@ -611,7 +608,7 @@ instance (Finite v, Nominal a) => Nominal (Power v a) where
   equiv (Power f) b c = Prelude.all (\ v -> equiv (f v) b c) every
   {-# inline equiv #-}
 
-instance Finite v => Nominal1 (Power v) where
+instance (IsName n, Finite v) => Nominal1 n (Power v) where
   supp1 f (Power g) = foldMap (f . g) every
   {-# inline supp1 #-}
   supply1 f (Power g) = foldMap (f . g) every
@@ -621,23 +618,23 @@ newtype Applied f a = Applied { getApplied :: f a }
 instance (Applicative f, Semigroup a) => Semigroup (Applied f a) where Applied m <> Applied n = Applied $ liftA2 (<>) m n
 instance (Applicative f, Monoid a) => Monoid (Applied f a) where mempty = Applied $ pure mempty
 
-instance (Finite a, Binding b) => Binding (Power a b) where
+instance (Finite a, Binding n b) => Binding n (Power a b) where
   binding (Power f) (Power g) = getApplied $ foldMap (\x -> Applied $ binding (f x) (g x)) every
   {-# inline binding #-}
   bv (Power f) = foldMap (bv . f) every
   {-# inline bv #-}
 
-instance Finite a => Binding1 (Power a) where
+instance (IsName n, Finite a) => Binding1 n (Power a) where
   binding1 f (Power g) (Power h) = getApplied $ foldMap (\x -> Applied $ f (g x) (h x)) every
   {-# inline binding1 #-}
   bv1 g (Power f) = foldMap (g . f) every
   {-# inline bv1 #-}
 
-instance (Finite a, Irrefutable b) => Irrefutable (Power a b) where
+instance (Finite a, Irrefutable n b) => Irrefutable n (Power a b) where
   match (Power f) (Power g) = foldMap (\x -> match (f x) (g x)) every
   {-# inline match #-}
 
-instance Finite a => Irrefutable1 (Power a) where
+instance (IsName n, Finite a) => Irrefutable1 n (Power a) where
   match1 f (Power g) (Power h) = foldMap (\x -> f (g x) (h x)) every
   {-# inline match1 #-}
 
@@ -654,7 +651,7 @@ instance FinitelyPowered (->) where
   unpower f a = Power $ \v -> f v a
   {-# inline unpower #-}
 
-instance FinitelyPowered Nom where
+instance IsName n => FinitelyPowered (Nom n) where
   mapPower (Nom s f) = Nom s (fmap f)
   {-# inline mapPower #-}
   power (Nom s f) v = Nom s $ \a -> runPower (f a) v

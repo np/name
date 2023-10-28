@@ -1,8 +1,5 @@
 {-# language TypeFamilies #-}
-{-# language EmptyCase #-}
-{-# language TypeOperators #-}
 {-# language FlexibleContexts #-}
-{-# language PatternSynonyms #-}
 {-# language LambdaCase #-}
 
 ---------------------------------------------------------------------------------
@@ -31,31 +28,37 @@ import Data.Bits
 import Data.List (groupBy, sort)
 import Data.Name.Internal.Perm
 import Data.Name.Internal.Trie
+import Data.Name.Internal.IsName
 import Data.Semigroup
 import Prelude hiding (elem, lookup)
+import Data.Name.Type (Name (..))
+import Data.Function (on)
 
 -- | The pair of a permutation and its inverse permutation
-data Permutation = Permutation Perm Perm
+data Permutation n = Permutation (Perm n) (Perm n)
   deriving Show
 
-instance Eq Permutation where
+instance Eq n => Eq (Permutation n) where
   Permutation x _ == Permutation y _ = x == y
 
-instance Ord Permutation where
-  Permutation x _ `compare` Permutation y _ = compare x y
+{- See remark in Data.Name.Internal.Perm
 
-instance AsEmpty Permutation where
+instance Ord n => Ord (Permutation n) where
+  Permutation x _ `compare` Permutation y _ = compare x y
+-}
+
+instance IsName n => AsEmpty (Permutation n) where
   _Empty = prism (const mempty) $ \case
     Permutation (Perm Empty) _ -> Right ()
     t -> Left t
 
-inv :: Permutation -> Permutation
+inv :: Permutation n -> Permutation n
 inv (Permutation s t) = Permutation t s
 
-square :: Permutation -> Permutation
+square :: IsName n => Permutation n -> Permutation n
 square (Permutation s t) = Permutation (square' s) (square' t)
 
-instance Semigroup Permutation where
+instance IsName n => Semigroup (Permutation n) where
   Permutation a b <> Permutation c d = Permutation (a <> c) (d <> b)
   stimes n x0 = case compare n 0 of
     LT -> f (inv x0) (negate n)
@@ -71,22 +74,22 @@ instance Semigroup Permutation where
         | y == 1 = x <> z
         | otherwise = g (square x) (quot y 2) (x <> z)
 
-instance Monoid Permutation where
+instance IsName n => Monoid (Permutation n) where
   mempty = Permutation mempty mempty
 
--- promote :: Perm -> Permutation
+-- promote :: Perm n -> Permutation n
 -- promote t = Permutation t (inv' t)
 
 -- | equivariant
-swap :: Name -> Name -> Permutation
+swap :: IsName n => Name n -> Name n -> Permutation n
 swap i j
-  | i /= j = join Permutation $ Perm $ insert i j $ insert j i Empty
+  | i /= j = join Permutation $ Perm $ insert i (_nameRepr j) $ insert j (_nameRepr i) Empty
   | otherwise = mempty
 {-# inline [0] swap #-}
 
 -- | This is not quite natural order, as its easiest for me to find the largest element and work backwards.
 -- for natural order, reverse the list of cycles. Not a nominal arrow
-rcycles :: Permutation -> [[Name]]
+rcycles :: IsName n => Permutation n -> [[Name n]]
 rcycles (Permutation t0 _) = go t0 where
   go t = case sup' t of
     Nothing -> []
@@ -94,18 +97,18 @@ rcycles (Permutation t0 _) = go t0 where
       (t',xs) -> xs : go t'
 
   -- mangles the tree to remove this cycle as we go
-  peel :: Name -> Name -> Perm -> (Perm, [Name])
+  peel :: IsName n => Name n -> Name n -> Perm n -> (Perm n, [Name n])
   peel m e (Perm t) = case lookup e t of
     Nothing -> error $ show (m,e,t)
-    Just n | n == m -> (Perm (delete e t), [e])
-           | otherwise -> (e:) <$> peel m n (Perm (delete e t))
+    Just n | NameRepr n == m -> (Perm (delete e t), [e])
+           | otherwise -> (e:) <$> peel m (NameRepr n) (Perm (delete e t))
 
 -- | standard cyclic representation of a permutation, broken into parts. Not equivariant
-cycles :: Permutation -> [[Name]]
+cycles :: IsName n => Permutation n -> [[Name n]]
 cycles = reverse . rcycles
 
 -- | standard cyclic representation of a permutation, smashed flat. Not equivariant
-cyclic :: Permutation -> [Name]
+cyclic :: IsName n => Permutation n -> [Name n]
 cyclic = concat . cycles
 
 -- | If the conjugacy class of two permutations is the same then there is a permutation that
@@ -115,7 +118,7 @@ cyclic = concat . cycles
 -- 'conjugacyClass' x ≡ 'conjugacyClass' y => ∃z, y = z <> x <> inv z
 -- 'perm' p 'conjugacyClass' q = 'conjugacyClass' ('perm' p q) = 'conjugacyClass' q
 -- @
-conjugacyClass :: Permutation -> [Int]
+conjugacyClass :: IsName n => Permutation n -> [Int]
 conjugacyClass = sort . map length . rcycles
 
 -- | Reassemble takes a standard cyclic representation smashed flat and reassembles the cycles, not equivariant
@@ -126,17 +129,18 @@ conjugacyClass = sort . map length . rcycles
 -- 'perm' p . 'reassemble' = 'reassemble' . 'perm' p
 -- @
 --
-reassemble :: [Name] -> [[Name]]
-reassemble = groupBy (\(Name x) (Name y) -> x > y)
+-- TODO move to Data.Name.Type?
+reassemble :: Ord n => [Name n] -> [[Name n]]
+reassemble = groupBy ((>) `on` _nameRepr)
 
 -- | Equivariant
 -- 
 -- @
 -- 'perm' p 'parity' q = perm p ('parity' p ('perm' (inv p) q)) = 'parity' q
 -- @
-parity :: Permutation -> Bool
+parity :: IsName n => Permutation n -> Bool
 parity = foldr (xor . foldr (const not) True) True . rcycles
 
 -- | Determinant of the permutation matrix, equivariant
-sign :: Permutation -> Int
+sign :: IsName n => Permutation n -> Int
 sign g = (-1) ^ fromEnum (parity g)

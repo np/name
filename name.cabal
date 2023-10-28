@@ -41,6 +41,7 @@ library
 
   exposed-modules:
     Data.Name
+    Data.Name.Internal.IsName
     Data.Name.Internal.Fun
     Data.Name.Internal.Map
     Data.Name.Internal.Perm
@@ -50,6 +51,7 @@ library
     Data.Name.Lattice
     Data.Name.Logic
     Data.Name.Map
+    Data.Name.Natural
     Data.Name.Permutation
     Data.Name.Set
     Data.Name.Support

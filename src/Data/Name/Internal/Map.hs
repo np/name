@@ -6,6 +6,9 @@
 {-# language FlexibleContexts #-}
 {-# language PatternSynonyms #-}
 {-# language ViewPatterns #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE InstanceSigs #-}
 
 ---------------------------------------------------------------------------------
 -- |
@@ -20,97 +23,103 @@
 module Data.Name.Internal.Map where
 
 import Control.Lens hiding ((#))
-import Data.Functor.Compose
+import Data.Functor.Compose ( Compose(Compose, getCompose) )
 import Data.Name.Class
 import qualified Data.Name.Internal.Trie as Trie
-import Data.Name.Internal.Trie (Trie(..), Name)
-import Data.Name.Support
+import Data.Name.Internal.Trie (Trie(..))
+import Data.Name.Support ( Support(..) )
+import Data.Functor (void)
+import Data.Name.Type (Name)
 
 -- maps from atoms to values, contains a memoized approximate support
-data Map a = Map !Support !(Trie a)
+data Map n a = Map !(Support n) !(Trie n a)
 
 -- equivariant
-union :: NominalSemigroup a => Map a -> Map a -> Map a
-union (Map s0a t0a) (Map s0b t0b) = Map (s0a <> s0b) (t0a <> t0b) where
+union :: NominalSemigroup n a => Map n a -> Map n a -> Map n a
+union (Map s0a t0a) (Map s0b t0b) = Map (s0a <> s0b) (t0a <> t0b)
 
-instance NominalSemigroup a => Semigroup (Map a) where
+instance NominalSemigroup n a => Semigroup (Map n a) where
   (<>) = union
 
-instance NominalSemigroup a => Monoid (Map a) where
-  mempty = Map mempty Empty
+empty :: IsName n => Map n a
+empty = Map mempty Empty
+{-# INLINE empty #-}
 
-instance NominalSemigroup a => NominalSemigroup (Map a)
+instance NominalSemigroup n a => Monoid (Map n a) where
+  mempty = empty
 
-instance NominalSemigroup a => NominalMonoid (Map a)
+instance NominalSemigroup n a => NominalSemigroup n (Map n a)
+
+instance NominalSemigroup n a => NominalMonoid n (Map n a)
 
 -- requires a equivariant morphism, if so, equivariant
-intersectionWith :: (a -> b -> c) -> Map a -> Map b -> Map c
+intersectionWith :: IsName n => (a -> b -> c) -> Map n a -> Map n b -> Map n c
 intersectionWith f (Map s0 t0) (Map s1 t1) = case Trie.intersectionWith f t0 t1 of
-  Empty -> Map mempty Empty
+  Empty -> empty
   t     -> Map (s0 <> s1) t
 
 -- equivariant
-intersection :: Map a -> Map a -> Map a
+intersection :: IsName n => Map n a -> Map n a -> Map n a
 intersection (Map s0 t0) (Map _ t1) = case Trie.intersection t0 t1 of
-  Empty -> Map mempty Empty
+  Empty -> empty
   t     -> Map s0 t
 
 -- equivariant
-diff :: Nominal s => Map a -> s -> Map a
+diff :: Nominal n s => Map n a -> s -> Map n a
 diff (Map s0 t0) (supp -> Supp t1) = case Trie.diff t0 t1 of
-  Empty -> Map mempty Empty
+  Empty -> empty
   t -> Map s0 t
 
 -- equivariant
-(\\) :: Nominal s => Map a -> s -> Map a
+(\\) :: Nominal n s => Map n a -> s -> Map n a
 (\\) = diff
 
 -- equivariant
-lookup :: Name -> Map a -> Maybe a
+lookup :: IsName n => Name n -> Map n a -> Maybe a
 lookup i (Map _ t) = Trie.lookup i t
 
 -- equivariant
-delete :: Name -> Map a -> Map a
+delete :: IsName n => Name n -> Map n a -> Map n a
 delete i (Map s0 t0) = case Trie.delete i t0 of
-  Empty -> Map mempty Empty
+  Empty -> empty
   t -> Map s0 t
 
 -- equivariant
-insert :: Nominal a => Name -> a -> Map a -> Map a
+insert :: (IsName n, Nominal n a) => Name n -> a -> Map n a -> Map n a
 insert v a (Map s t) = Map (supp v <> supp a <> s) $ Trie.insert v a t
 
 -- equivariant
-singleton :: Nominal a => Name -> a -> Map a
+singleton :: (IsName n, Nominal n a) => Name n -> a -> Map n a
 singleton v a = Map (supp v <> supp a) (Trie.singleton v a)
 
-type instance Index (Map a) = Name
-type instance IxValue (Map a) = a
-instance Nominal a => Ixed (Map a)
-instance Nominal a => At (Map a) where
+type instance Index (Map n a) = Name n
+type instance IxValue (Map n a) = a
+instance Nominal n a => Ixed (Map n a)
+instance Nominal n a => At (Map n a) where
   at a0 f0 (Map s0 t0) = tweak <$> getCompose (at a0 (Compose . fmap diag . f0) t0) where
     diag a = (a,a)
-    tweak (_, Empty)  = Map mempty Empty
+    tweak (_, Empty)  = empty
     tweak (Just a,t)  = Map (supp a0 <> supp a <> s0) t
     tweak (Nothing,t) = Map s0 t
 
-instance AsEmpty (Map a) where
-  _Empty = prism (const (Map mempty Empty)) $ \case
+instance IsName n => AsEmpty (Map n a) where
+  _Empty = prism (const empty) $ \case
     Map _ Empty -> Right ()
     t           -> Left t
 
 -- equivariant, clean up the cached support
-trim :: Nominal a => Map a -> Map a
-trim (Map _ t0) = Map (Supp (() <$ t0) <> foldMap supp t0) t0
+trim :: Nominal n a => Map n a -> Map n a
+trim (Map _ t0) = Map (Supp (void t0) <> foldMap supp t0) t0
 
-instance Permutable1 Map where
+instance IsName n => Permutable1 n (Map n) where
   perm1 f p (Map s t) = Map (perm p s) (perm1 f p t)
   trans1 f i j (Map s t) = Map (trans i j s) (trans1 f i j t)
 
-instance Permutable a => Permutable (Map a) where
+instance Permutable n a => Permutable n (Map n a) where
   perm p (Map s t) = Map (perm p s) (perm p t)
   trans i j (Map s t) = Map (trans i j s) (trans i j t)
 
-instance Permutable a => Nominal (Map a) where
+instance Permutable n a => Nominal n (Map n a) where
   a # (Map s _) = a # s
   supp (Map s _) = s
   equiv (Map s _) = equiv s

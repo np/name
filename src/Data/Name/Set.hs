@@ -3,10 +3,12 @@
 {-# language EmptyCase #-}
 {-# language TypeOperators #-}
 {-# language FlexibleContexts #-}
+{-# language FlexibleInstances #-}
 {-# language PatternSynonyms #-}
 {-# language LambdaCase #-}
 {-# language ConstraintKinds #-}
 {-# language DefaultSignatures #-}
+{-# language MultiParamTypeClasses #-}
 {-# language GADTs #-}
 
 ---------------------------------------------------------------------------------
@@ -27,92 +29,94 @@ import Data.Functor.Classes
 import Data.Maybe (isJust)
 import Data.Name.Lattice
 import qualified Data.Name.Internal.Trie as Trie
-import Data.Name.Internal.Trie (Trie, Name(..))
+import Data.Name.Internal.IsName (IsName)
+import Data.Name.Internal.Trie (Trie)
 import GHC.Exts (IsList(..))
 import Unsafe.Coerce
+import Data.Name.Type (Name (..))
 
-data Set where
-  Set :: Trie a -> Set
+data Set n where
+  Set :: Trie n a -> Set n
 
-foldr :: (Name -> r -> r) -> r -> Set -> r
+foldr :: (Name n -> r -> r) -> r -> Set n -> r
 foldr f z (Set t) = ifoldr (\i _ r -> f i r) z t
 {-# inline foldr #-}
 
-instance Eq Set where
+instance Eq n => Eq (Set n) where
   Set x == Set y = liftEq (\_ _ -> True) x y
 
-instance Ord Set where
-  Set x `compare` Set y = liftCompare (\_ _ -> EQ) x y
+instance Ord n => Ord (Set n) where
+  Set x `compare` Set y = liftCompare (\_ _ -> EQ) x y -- what?
 
-instance Show Set where
-  showsPrec d (Set xs) = showsPrec d $ ifoldr (\i _ r -> i:r) [] xs
+instance Show n => Show (Set n) where
+  showsPrec d (Set xs) = showsPrec d $ _nameRepr <$> ifoldr (\i _ r -> i:r) [] xs
 
-instance IsList Set where
-  type Item Set = Name
+instance IsName n => IsList (Set n) where
+  type Item (Set n) = Name n
   fromList = Prelude.foldr insert mempty
-  toList (Set xs) = ifoldr (\i _ r -> i:r) [] xs
+  toList (Set xs) = ifoldr (\i _ r -> i : r) [] xs
   
-instance PartialOrder Set where
+instance IsName n => PartialOrder (Set n) where
   Set a ⊆ Set b = Trie.isSubtrieOfBy (\_ _ -> True) a b
 
-instance Semigroup Set where
+instance IsName n => Semigroup (Set n) where
   Set m <> Set n = Set (Trie.union m (unsafeCoerce n)) -- evil
 
-instance Monoid Set where
+instance IsName n => Monoid (Set n) where
   mempty = Set Empty
 
-instance Join Set
+instance IsName n => Join (Set n)
 
-instance BoundedJoin Set
+instance IsName n => BoundedJoin (Set n)
 
-instance Meet Set where
+instance IsName n => Meet (Set n) where
   Set m ∧ Set n = Set (Trie.intersection m n)
 
-instance DistributiveLattice Set
+instance IsName n => DistributiveLattice (Set n)
 
-instance GBA Set where
+instance IsName n => GBA (Set n) where
   Set m \\ Set n = Set (Trie.diff m n)
 
-instance AsEmpty Set where
+instance IsName n => AsEmpty (Set n) where
   _Empty = prism (const (Set Empty)) $ \case
     Set Empty -> Right ()
     x -> Left x
 
-type instance Index Set = Name
+type instance Index (Set n) = Name n
 
-instance Contains Set where
+instance IsName n => Contains (Set n) where
   contains a f (Set e) = Set <$> at a (fmap guard' . f . isJust) e where
     guard' :: Bool -> Maybe a
     guard' b = undefined <$ guard b
 
-class (Index a ~ Name, Contains a) => SetLike a where
-  insert :: Name -> a -> a
+class Contains a => SetLike a where
+  insert :: Index a -> a -> a
   insert a = contains a .~ True
   {-# inline insert #-}
 
-  delete :: Name -> a -> a
+  delete :: Index a -> a -> a
   delete a = contains a .~ False
   {-# inline delete #-}
 
-  member :: Name -> a -> Bool
+  member :: Index a -> a -> Bool
   member = view . contains
   {-# inline member #-}
 
-  singleton :: Name -> a
-  default singleton :: BoundedJoin a => Name -> a
+  singleton :: Index a -> a
+  default singleton :: BoundedJoin a => Index a -> a
   singleton a = insert a bottom
   {-# inline singleton #-}
 
 infixr 6 +>
 
-(+>) :: SetLike a => Name -> a -> a
+(+>) :: SetLike a => Index a -> a -> a
 (+>) = insert
 
-instance SetLike Set where
+instance IsName n => SetLike (Set n) where
   insert a (Set t) = Set (Trie.insert a undefined t)
   delete a (Set t) = Set (Trie.delete a t)
   member a (Set t) = Trie.member a t
   singleton a      = Set (Trie.singleton a ())
 
-disjoint :: Set -> Set -> Bool
+disjoint :: IsName n => Set n -> Set n -> Bool
 disjoint (Set a) (Set b) = Trie.disjoint a b

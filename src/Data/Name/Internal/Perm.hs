@@ -1,9 +1,5 @@
-{-# language LambdaCase #-}
 {-# language TypeFamilies #-}
-{-# language EmptyCase #-}
-{-# language TypeOperators #-}
 {-# language FlexibleContexts #-}
-{-# language PatternSynonyms #-}
 {-# language RankNTypes #-}
 
 ---------------------------------------------------------------------------------
@@ -21,37 +17,45 @@ module Data.Name.Internal.Perm where
 import Control.Lens
 import Control.Monad
 import Data.Maybe
+import Data.Name.Internal.IsName
 import Data.Name.Internal.Trie
-import Data.Semigroup (Semigroup(..))
 import Prelude hiding (elem, lookup)
+import Data.Name.Type (Name(..))
 
-newtype Perm = Perm {getPerm :: Trie Name }
-  deriving (Eq,Ord,Show)
+{- REMARK on why Ord is commented out.
 
-perm' :: Perm -> Name -> Name
-perm' (Perm t) a = fromMaybe a $ lookup a t
+The `Ord` instance on `Perm` leaks the `Ord` on `Name` since
+`cmp (swap a b) (swap a c)` equals `cmp (_nameRepr b) (_nameRepr c)`.
 
-inv' :: Perm -> Perm
-inv' (Perm x) = Perm $ ifoldr (flip insert) Empty x where
+-}
 
-square' :: Perm -> Perm
+newtype Perm n = Perm { getPerm :: Trie n n }
+  deriving (Eq,{-Ord,-}Show)
+
+perm' :: IsName n => Perm n -> Name n -> Name n
+perm' (Perm t) a = maybe a NameRepr $ lookup a t
+
+inv' :: IsName n => Perm n -> Perm n
+inv' (Perm x) = Perm $ ifoldr (\(NameRepr a) b -> insert (NameRepr b) a) Empty x
+
+square' :: IsName n => Perm n -> Perm n
 square' (Perm t) = Perm $ ifilterMap go t where
-  go i j = mfilter (i/=) $ lookup j t -- check this
+  go (NameRepr i) j = mfilter (i/=) $ lookup (NameRepr j) t -- check this
 
-sup' :: Perm -> Maybe Name
+sup' :: Perm n -> Maybe (Name n)
 sup' (Perm t) = sup t
 
-instance Semigroup Perm where
+instance IsName n => Semigroup (Perm n) where
   --  x       y        z
   --  ----    ----     ------
   --  0->1             0 -> 2
   --  1->0    1->2     1 -> 0
   --          2->1     2 -> 1
-  Perm x <> yt@(Perm y) = Perm $ ifilterMap f $ union (perm' yt <$> x) y where
-    f i = mfilter (i/=) . pure
+  Perm x <> yt@(Perm y) = Perm $ ifilterMap f $ union (_nameRepr . perm' yt . NameRepr <$> x) y where
+    f (NameRepr i) = mfilter (i/=) . pure
 
-elem :: Name -> Lens' Perm Name
-elem i f (Perm s) = Perm <$> at i (non i f) s where
+elem :: IsName n => Name n -> Lens' (Perm n) n
+elem i f (Perm s) = Perm <$> at i (non (_nameRepr i) f) s
 
-instance Monoid Perm where
+instance IsName n => Monoid (Perm n) where
   mempty = Perm Empty

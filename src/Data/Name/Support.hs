@@ -62,41 +62,45 @@
 module Data.Name.Support where
 
 import Control.Lens hiding (set, sets)
-import Data.Discrimination.Grouping
+import Data.Discrimination.Grouping ( runGroup, Grouping(..) )
 import qualified Data.List as List
-import Data.Name.Lattice
-import Data.Name.Internal.Trie as Trie
-import Data.Name.Set as Set
-import Data.Void
+import Data.Name.Lattice ( PartialOrder(..), Meet(..), BoundedJoin(..), Join(..) )
+import Data.Name.Internal.IsName ( IsName )
+import Data.Name.Internal.Trie ( Trie, union, diff, fromDistinctAscList, imerge )
+import Data.Name.Set as Set ( Set(..), disjoint )
+import Data.Void ( Void )
 import qualified GHC.Exts as Exts
-import GHC.Generics
+import GHC.Generics ( Generic )
+import Data.Name.Type (Name)
+import Data.Function (on)
+-- import qualified Control.Lens.Internal.Deque as Trie
 
-data Support where
-  Supp :: (Eq a, Grouping a) => Trie a -> Support
+data Support n where
+  Supp :: (Eq a, Grouping a) => Trie n a -> Support n
 
-instance Show Support where
+instance Show n => Show (Support n) where
   showsPrec d xs = showParen (d > 10) $
      showString "Supp " . showsPrec 11 (partitions xs)
 
 -- | The finest support compatible with this support
 -- this is a local top
-finest :: Support -> Support
+finest :: IsName n => Support n -> Support n
 finest (Supp xs) = Supp (imap const xs)
 
 -- | Fixing N elements, this is the local coarsest partition.
 --
--- @coarsest . supp = id :: Set -> Set@
-coarsest :: Support -> Set
+-- @coarsest . supp = id :: Set n -> Set n@
+coarsest :: Support n -> Set n
 coarsest (Supp xs) = Set xs
 
-sets :: Support -> [Set]
+sets :: IsName n => Support n -> [Set n]
 sets (Supp t) = Exts.fromList <$> runGroup grouping (ifoldr (\i a r -> (a, i): r) [] t)
 
-unsets :: [Set] -> Support
-unsets = Supp . ifoldr (\i (Set t) r -> Trie.union (i <$ t) r) Empty
+unsets :: IsName n => [Set n] -> Support n
+unsets = Supp . ifoldr (\i (Set t) r -> union (i <$ t) r) Empty
 
 -- | Meets compute coarser supports by glomming together partitions
-instance Meet Support where
+instance IsName n => Meet (Support n) where
   xs0 ∧ ys0 = unsets $ go (sets xs0) (sets ys0) where
     go _ [] = []
     go [] ys = ys
@@ -108,28 +112,28 @@ instance Meet Support where
 data These a b = This a | That b | These a b deriving (Generic, Eq, Ord, Show, Grouping)
 
 -- | Joins compute finer grained supports on a set of elements
-instance Join Support where
+instance IsName n => Join (Support n) where
   Supp xs ∨ Supp ys = Supp $ imerge (\_ x y -> Just $ These x y) (fmap This) (fmap That) xs ys
 
-instance BoundedJoin Support where
-  bottom = Supp (Empty :: Trie Void)
+instance IsName n => BoundedJoin (Support n) where
+  bottom = Supp (Empty :: IsName n => Trie n Void)
 
-instance Semigroup Support where
+instance IsName n => Semigroup (Support n) where
   (<>) = (∨)
 
-instance Monoid Support where
+instance IsName n => Monoid (Support n) where
   mempty = bottom
 
 flop :: a -> b -> [(b,a)] -> [(b,a)]
 flop k v r = (v,k):r
 
-canonical :: Support -> [[Name]]
+canonical :: Support n -> [[Name n]]
 canonical (Supp xs) = runGroup grouping $ ifoldr flop [] xs
 
-partitions :: Support -> [Set]
-partitions = fmap (Set . Trie.fromDistinctAscList . fmap (,())) . canonical
+partitions :: Support n -> [Set n]
+partitions = fmap (Set . fromDistinctAscList . fmap (,())) . canonical
 
-instance PartialOrder Support where
+instance IsName n => PartialOrder (Support n) where
   -- |
   -- @
   -- {{x,y},U-{x,y}} ⊆ {{x,y},{z},U-{x,y,z}}
@@ -142,8 +146,8 @@ instance PartialOrder Support where
       z = ys^.at (head zs)
 
 -- TODO: compute this more productively using the guts of 'Grouping'
-instance Eq Support where
-  xs == ys = canonical xs == canonical ys
+instance Eq n => Eq (Support n) where
+  (==) = (==) `on` canonical
 
-sans :: Support -> Set -> Support
-sans (Supp xs) (Set ys) = Supp (Trie.diff xs ys)
+sans :: IsName n => Support n -> Set n -> Support n
+sans (Supp xs) (Set ys) = Supp (diff xs ys)

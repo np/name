@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 ---------------------------------------------------------------------------------
 -- |
 -- Copyright :  (c) Edward Kmett 2018
@@ -9,25 +10,20 @@
 ---------------------------------------------------------------------------------
 
 module Data.Name.Type
-( Name
-, AsName(..)
-, HasName(..)
+( Name(..)
 ) where
+import Data.Discrimination (Grouping, Group)
+import Data.Discrimination.Grouping (Grouping(..))
+import Control.Lens (Contravariant(..))
+import Data.Coerce (coerce)
 
-import Control.Lens
-import Data.Name.Internal.Trie
+-- By design, a `Name` is meant to support the minimum amount of instances.
+-- It has `Eq` and `Grouping`.
+-- It has `Show` for debugging.
+-- Its representation might have `Ord`, `Hashable`, `Num`...
+newtype Name n = NameRepr { _nameRepr :: n }
+  deriving (Eq, Show)
 
-class AsName t where
-  _Name :: Prism' t Name
-
-instance AsName Name where
-  _Name = id
-
-instance AsName a => AsName (Maybe a) where
-  _Name = _Just._Name
-
-class HasName t where
-  atom :: Lens' t Name
-
-instance HasName Name where
-  atom = id
+instance Grouping n => Grouping (Name n) where
+  grouping = contramap coerce (grouping :: Group n)
+  {-# inlineable grouping #-}

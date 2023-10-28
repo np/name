@@ -10,15 +10,16 @@
 
 module Data.Name.Map
 ( Map
-, union            -- :: NominalSemigroup a => Map a -> Map a -> Map a
-, intersectionWith -- :: (a -> b -> c) -> Map a -> Map b -> Map c
-, intersection     -- :: Map a -> Map a -> Map a
-, diff             -- :: Map a -> Set -> Map a
-, (\\)             -- :: Map a -> Set -> Map a
-, lookup           -- :: Atom -> Map a -> Maybe a
-, delete           -- :: Atom -> Map a -> Map a
-, insert           -- :: Nominal a => Atom -> a -> Map a -> Map a
-, singleton        -- :: Nominal a => Atom -> a -> Map a
+, union
+, intersectionWith
+, intersection
+, diff
+, (\\)
+, lookup
+, delete
+, insert
+, singleton
+, empty
 ) where
 
 import Prelude hiding (lookup)

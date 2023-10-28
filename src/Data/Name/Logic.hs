@@ -1,5 +1,7 @@
 {-# language LambdaCase #-}
 {-# language DeriveGeneric #-}
+{-# language FlexibleInstances #-}
+{-# language MultiParamTypeClasses #-}
 {-# language TypeFamilies #-}
 {-# language BangPatterns #-}
 
@@ -22,21 +24,22 @@ module Data.Name.Logic
 import Control.Lens
 import Data.Semigroup
 import GHC.Generics
-import Data.Name.Type
 import Data.Name.Lattice
 import Data.Name.Internal.Fun
 import Data.Name.Set
+import Data.Name.Type (Name)
+import Data.Name.Class
 
 -- TODO: check my back of the envelope math
 
 -- the finite-cofinite algebra on atoms
 -- this satisfies excluded-middle, etc.
-data Prop = Finite Set | Cofinite Set deriving (Generic, Eq)
+data Prop n = Finite (Set n) | Cofinite (Set n) deriving (Generic, Eq)
 
--- instance Perm Prop
--- instance Nominal Prop
+instance IsName n => Permutable n (Prop n)
+instance IsName n => Nominal n (Prop n)
 
-instance Semigroup Prop  where
+instance IsName n => Semigroup (Prop n)  where
   stimes n m = case compare n 0 of
     LT -> neg m
     EQ -> mempty
@@ -49,13 +52,13 @@ instance Semigroup Prop  where
   Cofinite p <> Cofinite q = Cofinite (p ∧ q)
   {-# inline (<>) #-}
 
-instance Monoid Prop where
+instance IsName n => Monoid (Prop n) where
   mempty = Finite mempty
 
-instance Join Prop
-instance BoundedJoin Prop
+instance IsName n => Join (Prop n)
+instance IsName n => BoundedJoin (Prop n)
 
-instance Meet Prop where
+instance IsName n => Meet (Prop n) where
   Finite p   ∧ Finite q   = Finite   (p ∧ q) -- pq
   Finite p   ∧ Cofinite q = Finite   (p \\ q) -- p(S-q)=pS-pq=p-q
   Cofinite p ∧ Finite q   = Finite   (q \\ p) -- (S-p)q=Sq-pq=q-pq=q-p
@@ -63,9 +66,9 @@ instance Meet Prop where
   -- (S-p)(S-q)=S(S-q)-p(S-q)=SS-Sq-pS-pq=S-q-p-pq=S-q-p=S-(q+p)
   {-# inline (∧) #-}
 
-instance DistributiveLattice Prop
+instance IsName n => DistributiveLattice (Prop n)
 
-instance GBA Prop where
+instance IsName n => GBA (Prop n) where
   -- nominal
   -- @p \\ q = p ∧ neg q@
   Finite p   \\ Finite q   = Finite   (p \\ q)
@@ -82,7 +85,7 @@ instance GBA Prop where
   {-# inline xor #-}
 
 -- nominal
-instance SetLike Prop where
+instance IsName n => SetLike (Prop n) where
   member a (Finite s)   = member a s
   member a (Cofinite s) = not (member a s)
   {-# inline member #-}
@@ -99,11 +102,11 @@ instance SetLike Prop where
   delete a (Cofinite s) = Cofinite (insert a s)
   {-# inline delete #-}
 
-instance BoundedMeet Prop where
+instance IsName n => BoundedMeet (Prop n) where
   top = Cofinite bottom
   {-# inline conlike top #-}
 
-instance Boolean Prop where
+instance IsName n => Boolean (Prop n) where
   neg (Finite s) = Cofinite s
   neg (Cofinite s) = Finite s
   {-# inline neg #-}
@@ -120,28 +123,28 @@ instance Boolean Prop where
   iff (Cofinite p) (Finite q)   = Finite   (p ∧ q)
   {-# inline iff #-}
 
--- instance NominalSemigroup Prop
--- instance NominalMonoid Prop
+-- instance NominalSemigroup (Prop n)
+-- instance NominalMonoid (Prop n)
 
-instance AsEmpty Prop where
+instance IsName n => AsEmpty (Prop n) where
   _Empty = prism (const (Finite mempty)) $ \case
      Finite Empty -> Right ()
      t -> Left t
   {-# inline _Empty #-}
 
-type instance Index Prop = Name
-instance Contains Prop where
+type instance Index (Prop n) = Name n
+instance IsName n => Contains (Prop n) where
   contains a f (Finite s) = Finite <$> contains a f s
   contains a f (Cofinite s) = Cofinite <$> contains a (fmap not . f . not) s
   {-# inline contains #-}
 
 -- lift a unary boolean function
-liftB :: (Bool -> Bool) -> Prop -> Prop
+liftB :: IsName n => (Bool -> Bool) -> Prop n -> Prop n
 liftB f !s
   | f False   = if f True then top else neg s
   | otherwise = if f True then s else bottom
 
-table :: Fun -> Prop -> Prop -> Prop
+table :: IsName n => Fun -> Prop n -> Prop n -> Prop n
 table TNever  _ _ = bottom
 table TAnd    f g = f ∧ g
 table TGt     f g = f \\ g -- f > g
@@ -160,9 +163,9 @@ table TNand   f g = neg (f ∧ g) -- ite f (neg g) One  -- nand f g
 table TAlways _ _ = top
 
 -- | lift boolean functions through the table e.g. @liftB2 (&&)@, @liftB2 (<=)@
-liftB2 :: (Bool -> Bool -> Bool) -> Prop -> Prop -> Prop
+liftB2 :: IsName n => (Bool -> Bool -> Bool) -> Prop n -> Prop n -> Prop n
 liftB2 = table . fun
 
--- instance Bits Prop
+-- instance Bits (Prop n)
 
--- TODO: instance PartialOrder Prop where
+-- TODO: instance PartialOrder (Prop n) where

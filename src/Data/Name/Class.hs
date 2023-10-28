@@ -4,10 +4,12 @@
 {-# language TypeOperators #-}
 {-# language FlexibleContexts #-}
 {-# language DefaultSignatures #-}
-{-# language PatternSynonyms #-}
 {-# language ViewPatterns #-}
 {-# language DeriveGeneric #-}
-{-# language MonoLocalBinds #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE InstanceSigs #-}
 
 ---------------------------------------------------------------------------------
 -- |
@@ -20,7 +22,10 @@
 ---------------------------------------------------------------------------------
 
 module Data.Name.Class
-( Permutable(..), Permutable1(..)
+( IsName()
+, AsName(..)
+, HasName(..)
+, Permutable(..), Permutable1(..)
 , Nominal(..), Nominal1(..)
 , Basic, Basic1
 , Supply(..), suppgen, equivgen, sepgen, supplysupp, supplygen
@@ -45,27 +50,50 @@ import Data.Functor.Contravariant
 import Data.Functor.Contravariant.Divisible
 import Data.Functor.Contravariant.Generic
 import qualified Data.Map.Internal as Map
-import Data.Name.Type
+import Data.Name.Type (Name(..))
 import Data.Name.Internal.Trie as Trie
 import Data.Name.Internal.Perm
 import Data.Name.Set as Set
 import Data.Name.Permutation
 import Data.Name.Support
-import Data.Name.Logic
 import Data.Proxy
 import Data.Void
 import GHC.Generics
 import Prelude hiding (elem)
+import Data.Name.Internal.IsName (IsName)
+
+--------------------------------------------------------------------------------
+-- * IsName
+--------------------------------------------------------------------------------
+
+class IsName n => AsName n t where
+  _Name :: Prism' t (Name n)
+
+instance IsName n => AsName n (Name n) where
+  _Name = id
+
+instance AsName n a => AsName n (Maybe a) where
+  _Name = _Just._Name
+
+--------------------------------------------------------------------------------
+-- * HasName
+--------------------------------------------------------------------------------
+
+class IsName n => HasName n t where
+  nameOf :: Lens' t (Name n)
+
+instance IsName n => HasName n (Name n) where
+  nameOf = id
 
 --------------------------------------------------------------------------------
 -- * Permutable
 --------------------------------------------------------------------------------
 
-transgen :: (Generic s, GPermutable (Rep s)) => Name -> Name -> s -> s
+transgen :: (Generic s, GPermutable n (Rep s)) => Name n -> Name n -> s -> s
 transgen i j = to . gtrans i j . from
 {-# inline [0] transgen #-}
 
-permgen :: (Generic s, GPermutable (Rep s)) => Permutation -> s -> s
+permgen :: (Generic s, GPermutable n (Rep s)) => Permutation n -> s -> s
 permgen p = to . gperm p . from
 {-# inline [0] permgen #-}
 
@@ -76,9 +104,9 @@ permgen p = to . gperm p . from
 "permgen/mempty=id" [~1] forall x. permgen (Permutation (Perm (Trie Map.Tip)) x) = id
   #-}
 
-class Permutable s where
-  trans :: Name -> Name -> s -> s
-  default trans :: (Generic s, GPermutable (Rep s)) => Name -> Name -> s -> s
+class IsName n => Permutable n s where
+  trans :: Name n -> Name n -> s -> s
+  default trans :: (Generic s, GPermutable n (Rep s)) => Name n -> Name n -> s -> s
   trans = transgen
   {-# inline trans #-}
 
@@ -87,82 +115,82 @@ class Permutable s where
   -- perm mempty = id
   -- perm (p <> q) = perm p . perm q
   -- @
-  perm :: Permutation -> s -> s
-  default perm :: (Generic s, GPermutable (Rep s)) => Permutation -> s -> s
+  perm :: Permutation n -> s -> s
+  default perm :: (Generic s, GPermutable n (Rep s)) => Permutation n -> s -> s
   perm = permgen
   {-# inline perm #-}
 
-instance Permutable Name where
+instance IsName n => Permutable n (Name n) where
   trans a b c
     | c == a = b
     | c == b = a
     | otherwise = c
   {-# inline trans #-}
-  perm (Permutation t _) i = perm' t i
+  perm (Permutation t _) = perm' t
+
   {-# inline perm #-}
 
-instance Permutable Permutation where
+instance IsName n => Permutable n (Permutation n) where
   trans a b t = swap a b <> t <> swap a b
   {-# inline trans #-}
   perm p t = p <> t <> inv p
   {-# inline perm #-}
 
-instance Permutable Set where
+instance IsName n => Permutable n (Set n) where
   trans i j s = s
     & contains j .~ s^.contains i
     & contains i .~ s^.contains j
   {-# inline trans #-}
   perm (Permutation (Perm p) _) z = ifoldr tweak z p where
-    tweak i j s = s & contains j .~ z^.contains i -- can't use trans, note s /= z
+    tweak i j s = s & contains (NameRepr j) .~ z^.contains i -- can't use trans, note s /= z
   {-# inline perm #-}
 
-instance Permutable Support where
+instance IsName n => Permutable n (Support n) where
   trans i j (Supp s) = Supp $ s
     & at j .~ s^.at i
     & at i .~ s^.at j
   {-# inline trans #-}
   perm (Permutation (Perm p) _) (Supp z) = Supp $ ifoldr tweak z p where
-    tweak i j s = s & at j .~ z^.at i
+    tweak i j s = s & at (NameRepr j) .~ z^.at i
   {-# inline perm #-}
 
-instance Permutable a => Permutable (Trie a) where
+instance Permutable n a => Permutable n (Trie n a) where
   trans i j s = s
     & at j .~ s^.at i
     & at i .~ s^.at j
   {-# inline trans #-}
   perm p0@(Permutation (Perm p) _) t = ifoldr tweak z p where
-    tweak i j s = s & at j .~ z^.at i
+    tweak i j s = s & at (NameRepr j) .~ z^.at i
     z = perm p0 <$> t
   {-# inline perm #-}
 
-instance (Permutable a, Permutable b) => Permutable (a -> b) where
+instance (Permutable n a, Permutable n b) => Permutable n (a -> b) where
   trans a b f = trans a b . f . trans a b
   {-# inline trans #-}
   perm p f = perm p . f . perm (inv p)
   {-# inline perm #-}
 
-instance Permutable Prop
-instance (Permutable a, Permutable b) => Permutable (a, b)
-instance (Permutable a, Permutable b, Permutable c) => Permutable (a, b, c)
-instance (Permutable a, Permutable b, Permutable c, Permutable d) => Permutable (a, b, c, d)
-instance (Permutable a, Permutable b) => Permutable (Either a b)
-instance Permutable a => Permutable [a]
-instance Permutable a => Permutable (Maybe a)
-instance Permutable (Proxy a)
-instance Permutable Void
-instance Permutable ()
-instance Permutable Bool
-instance Permutable Char where
+instance (Permutable n a, Permutable n b) => Permutable n (a, b)
+instance (Permutable n a, Permutable n b, Permutable n c) => Permutable n (a, b, c)
+instance (Permutable n a, Permutable n b, Permutable n c, Permutable n d) => Permutable n (a, b, c, d)
+instance (Permutable n a, Permutable n b) => Permutable n (Either a b)
+instance Permutable n a => Permutable n [a]
+instance Permutable n a => Permutable n (Maybe a)
+instance IsName n => Permutable n (Proxy a)
+instance IsName n => Permutable n Void
+instance IsName n => Permutable n ()
+instance IsName n => Permutable n Bool
+instance IsName n => Permutable n Char where
   trans _ _ = id
   {-# inline trans #-}
   perm _ = id
   {-# inline perm #-}
-instance Permutable Int where
+instance IsName n => Permutable n Int where
   trans _ _ = id
   {-# inline trans #-}
   perm _ = id
   {-# inline perm #-}
-instance Permutable Word where
+instance IsName n => Permutable n Word where
   trans _ _ = id
   {-# inline trans #-}
   perm _ = id
@@ -172,11 +200,11 @@ instance Permutable Word where
 -- * Permutable1
 --------------------------------------------------------------------------------
 
-transgen1 :: (Generic1 f, GPermutable1 (Rep1 f)) => (Name -> Name -> s -> s) -> Name -> Name -> f s -> f s
+transgen1 :: (Generic1 f, GPermutable1 n (Rep1 f)) => (Name n -> Name n -> s -> s) -> Name n -> Name n -> f s -> f s
 transgen1 f a b = to1 . gtrans1 f a b . from1
 {-# inline [0] transgen1 #-}
 
-permgen1 :: (Generic1 f, GPermutable1 (Rep1 f)) => (Permutation -> s -> s) -> Permutation -> f s -> f s
+permgen1 :: (Generic1 f, GPermutable1 n (Rep1 f)) => (Permutation n -> s -> s) -> Permutation n -> f s -> f s
 permgen1 f p = to1 . gperm1 f p . from1
 {-# inline [0] permgen1 #-}
 
@@ -187,33 +215,33 @@ permgen1 f p = to1 . gperm1 f p . from1
 "permgen1/mempty=id" [~1] forall f x. permgen1 f (Permutation (Perm (Trie Map.Tip)) x) = id
   #-}
 
-class Permutable1 f where
-  trans1 :: (Name -> Name -> s -> s) -> Name -> Name -> f s -> f s
-  default trans1 :: (Generic1 f, GPermutable1 (Rep1 f)) => (Name -> Name -> s -> s) -> Name -> Name -> f s -> f s
+class IsName n => Permutable1 n f where
+  trans1 :: (Name n -> Name n -> s -> s) -> Name n -> Name n -> f s -> f s
+  default trans1 :: (Generic1 f, GPermutable1 n (Rep1 f)) => (Name n -> Name n -> s -> s) -> Name n -> Name n -> f s -> f s
   trans1 = transgen1
   {-# inline trans1 #-}
 
-  perm1 :: (Permutation -> s -> s) -> Permutation -> f s -> f s
-  default perm1 :: (Generic1 f, GPermutable1 (Rep1 f)) => (Permutation -> s -> s) -> Permutation -> f s -> f s
+  perm1 :: (Permutation n -> s -> s) -> Permutation n -> f s -> f s
+  default perm1 :: (Generic1 f, GPermutable1 n (Rep1 f)) => (Permutation n -> s -> s) -> Permutation n -> f s -> f s
   perm1 = permgen1
   {-# inline perm1 #-}
 
-instance Permutable1 Proxy
-instance Permutable1 []
-instance Permutable1 Maybe
-instance Permutable a => Permutable1 ((,)a)
-instance (Permutable a, Permutable b) => Permutable1 ((,,) a b)
-instance (Permutable a, Permutable b, Permutable c) => Permutable1 ((,,,) a b c)
-instance Permutable a => Permutable1 (Either a)
+instance IsName n => Permutable1 n Proxy
+instance IsName n => Permutable1 n []
+instance IsName n => Permutable1 n Maybe
+instance Permutable n a => Permutable1 n ((,)a)
+instance (Permutable n a, Permutable n b) => Permutable1 n ((,,) a b)
+instance (Permutable n a, Permutable n b, Permutable n c) => Permutable1 n ((,,,) a b c)
+instance Permutable n a => Permutable1 n (Either a)
 
-instance Permutable1 Trie where
+instance IsName n => Permutable1 n (Trie n) where
   trans1 f i j s = z
     & at j .~ z^.at i
     & at i .~ z^.at j
     where z = f i j <$> s
   {-# inline trans1 #-}
   perm1 f p0@(Permutation (Perm p) _) t = ifoldr tweak z p where
-    tweak i j s = s & at j .~ z^.at i
+    tweak i j s = s & at (NameRepr j) .~ z^.at i
     z = f p0 <$> t
   {-# inline perm1 #-}
 
@@ -221,16 +249,16 @@ instance Permutable1 Trie where
 -- * Supplys
 --------------------------------------------------------------------------------
 
-newtype Supply = Supply {getSupply :: Name} deriving Generic
+newtype Supply n = Supply {getSupply :: n} deriving Generic
 
-instance Semigroup Supply where
+instance Ord n => Semigroup (Supply n) where
   Supply a <> Supply b = Supply (max a b)
 
-instance Monoid Supply where
+instance (IsName n, Num n) => Monoid (Supply n) where
   mempty = Supply 0
 
 {-
-instance Permutable Supply where
+instance Permutable (Supply n) where
   trans i j (a :- as) = trans i j a :- trans i j as
   perm p (a :- as) = perm p a :- perm p as
 -}
@@ -239,17 +267,17 @@ instance Permutable Supply where
 -- * Supported
 --------------------------------------------------------------------------------
 
-newtype Supported a = Supported { getSupported :: a -> Support }
+newtype Supported n a = Supported { getSupported :: a -> Support n }
 
-instance Contravariant Supported where
+instance Contravariant (Supported n) where
   contramap f (Supported g) = Supported (g . f)
 
-instance Divisible Supported where
+instance IsName n => Divisible (Supported n) where
   conquer = Supported $ \_ -> mempty
   divide f (Supported g) (Supported h) = Supported $ \a -> case f a of
     (b, c) -> g b <> h c
 
-instance Decidable Supported where
+instance IsName n => Decidable (Supported n) where
   lose f = Supported $ absurd . f
   choose f (Supported g) (Supported h) = Supported $ \a -> case f a of
     Left b -> g b
@@ -259,34 +287,35 @@ instance Decidable Supported where
 -- * Nominal
 --------------------------------------------------------------------------------
 
-sepgen :: Deciding Nominal s => Name -> s -> Bool
-sepgen a = getPredicate $ deciding (Proxy :: Proxy Nominal) (Predicate (a #))
+sepgen :: forall n s. Deciding (Nominal n) s => Name n -> s -> Bool
+sepgen a = getPredicate $ deciding (Proxy :: Proxy (Nominal n)) (Predicate (a #))
 {-# inline sepgen #-}
 
-suppgen :: Deciding Nominal s => s -> Support
-suppgen = getSupported $ deciding (Proxy :: Proxy Nominal) (Supported supp)
+suppgen :: forall n s. (IsName n, Deciding (Nominal n) s) => s -> Support n
+suppgen = getSupported $ deciding (Proxy :: Proxy (Nominal n)) (Supported supp)
 {-# inline suppgen #-}
 
-equivgen :: Deciding Nominal s => s -> Name -> Name -> Bool
-equivgen s i j = getPredicate (deciding (Proxy :: Proxy Nominal) (Predicate (\s' -> equiv s' i j))) s
+equivgen :: forall n s. Deciding (Nominal n) s => s -> Name n -> Name n -> Bool
+equivgen s i j = getPredicate (deciding (Proxy :: Proxy (Nominal n)) (Predicate (\s' -> equiv s' i j))) s
 {-# inline equivgen #-}
 
-supplygen :: Deciding Nominal s => s -> Supply
-supplygen = getOp $ deciding (Proxy :: Proxy Nominal) (Op supply)
+supplygen :: forall n s. (IsName n, Num n, Deciding (Nominal n) s) => s -> Supply n
+supplygen = getOp $ deciding (Proxy :: Proxy (Nominal n)) (Op supply)
 
 -- fast if you have O(1) support
-supplysupp :: Nominal s => s -> Supply
-supplysupp (supp -> Supp s) = Supply $ maybe (Name 0) (1+) $ sup s
+supplysupp :: Num n => Nominal n s => s -> Supply n
+supplysupp (supp -> Supp s) = Supply . maybe 0 ((1+) . _nameRepr) $ sup s
 
-class Permutable s => Nominal s where
+class Permutable n s => Nominal n s where
 
   -- @
   -- a # x = not (member a (supp b))
   -- @
-  (#) :: Name -> s -> Bool
-  default (#) :: Deciding Nominal s => Name -> s -> Bool
+  (#) :: Name n -> s -> Bool
+  default (#) :: Deciding (Nominal n) s => Name n -> s -> Bool
   (#) = sepgen
   {-# inline (#) #-}
+
   -- | The usual convention in nominal sets is to say something like:
   --
   -- @
@@ -307,87 +336,87 @@ class Permutable s => Nominal s where
   -- outside of the set, the answer wouldn't change. It is only when you permute in
   -- such a way that exchanges elements from within the set with elements outside of
   -- the set that the answer fails to match
-  supp :: s -> Support
-  default supp :: Deciding Nominal s => s -> Support
+  supp :: s -> Support n
+  default supp :: Deciding (Nominal n) s => s -> Support n
   supp = suppgen
   {-# inline supp #-}
 
-  supply :: s -> Supply
-  default supply :: Deciding Nominal s => s -> Supply
+  supply :: Num n => s -> Supply n
+  default supply :: (Num n, Deciding (Nominal n) s) => s -> Supply n
   supply = supplygen
   {-# inline supply #-}
 
   -- equivalent modulo support
-  equiv :: s -> Name -> Name -> Bool
-  default equiv :: Deciding Nominal s => s -> Name -> Name -> Bool
+  equiv :: s -> Name n -> Name n -> Bool
+  default equiv :: Deciding (Nominal n) s => s -> Name n -> Name n -> Bool
   equiv = equivgen
   {-# inline equiv #-}
 
-instance Nominal Permutation where
+instance IsName n => Nominal n (Permutation n) where
   a # Permutation (Perm t) _ = not (Trie.member a t)
   supp (Permutation (Perm t) _) = Supp t
   supply = supplysupp
-  equiv = equiv . supp
+  equiv π = equiv (supp π :: Support n)
 
-instance Nominal Support where
+instance IsName n => Nominal n (Support n) where
   a # Supp s = not (Trie.member a s)
   supp = id
   supply = supplysupp
   equiv (Supp s) i j = s^.at i == s^.at j
 
-instance Nominal Name where
+instance IsName n => Nominal n (Name n) where
   equiv a b c = (a == b) == (a == c)
-  supply (Name i) = Supply $ Name (i+1)
+  supply (NameRepr i) = Supply $ i+1
   (#) = (/=)
-  supp a = Supp (Trie.singleton a ())
+  supp n = Supp (Trie.singleton n ())
 
 newtype Blind a = Blind a
 instance Eq (Blind a) where _ == _ = True
 instance Ord (Blind a) where compare _ _ = EQ
 instance Grouping (Blind a) where grouping = conquer
 
-instance Nominal Set where
+instance IsName n => Nominal n (Set n) where
   a # s = not (Set.member a s)
   supply = supplysupp
   supp (Set s) = Supp (go s) where
-    go :: Trie a -> Trie (Blind a)
+    go :: Trie n a -> Trie n (Blind a)
     go = coerce
     _ignore :: a -> Blind a
     _ignore = Blind
 
   equiv s i j = Set.member i s == Set.member j s
 
-instance (Nominal a, Nominal b) => Nominal (a, b)
-instance (Nominal a, Nominal b, Nominal c) => Nominal (a, b, c)
-instance (Nominal a, Nominal b, Nominal c, Nominal d) => Nominal (a, b, c, d)
-instance (Nominal a, Nominal b) => Nominal (Either a b)
-instance Nominal a => Nominal [a]
-instance Nominal a => Nominal (Maybe a)
-instance Nominal (Proxy a)
-instance Nominal Void where
+instance (Nominal n a, Nominal n b) => Nominal n (a, b)
+instance (Nominal n a, Nominal n b, Nominal n c) => Nominal n (a, b, c)
+instance (Nominal n a, Nominal n b, Nominal n c, Nominal n d) => Nominal n (a, b, c, d)
+instance (Nominal n a, Nominal n b) => Nominal n (Either a b)
+instance Nominal n a => Nominal n [a]
+instance Nominal n a => Nominal n (Maybe a)
+instance IsName n => Nominal n (Proxy a)
+instance IsName n => Nominal n Void where
   equiv = absurd
   supply = absurd
   supp  = absurd
   (#) _ = absurd
 
-instance Nominal ()
+instance IsName n => Nominal n ()
 
-instance Nominal Bool where
+instance IsName n => Nominal n Bool where
   equiv _ _ _ = True
 
-instance Nominal Int where
-  equiv _ _ _ = True
-  _ # _ = True
-  supp _ = mempty
-  supply _ = mempty
-
-instance Nominal Char where
+instance IsName n => Nominal n Int where
   equiv _ _ _ = True
   _ # _ = True
   supp _ = mempty
   supply _ = mempty
 
-instance Nominal Word where
+instance IsName n => Nominal n Char where
+  equiv _ _ _ = True
+  _ # _ = True
+  supp _ = mempty
+  supply _ = mempty
+
+instance IsName n => Nominal n Word where
   equiv _ _ _ = True
   _ # _ = True
   supp _ = mempty
@@ -397,60 +426,60 @@ instance Nominal Word where
 -- * Lifted Nominal Support
 --------------------------------------------------------------------------------
 
-supp1gen :: Deciding1 Nominal f => (s -> Support) -> f s -> Support
-supp1gen f = getSupported $ deciding1 (Proxy :: Proxy Nominal) (Supported supp) (Supported f)
+supp1gen :: forall n f s. (IsName n, Deciding1 (Nominal n) f) => (s -> Support n) -> f s -> Support n
+supp1gen f = getSupported $ deciding1 (Proxy :: Proxy (Nominal n)) (Supported supp) (Supported f)
 
-supply1gen :: Deciding1 Nominal f => (s -> Supply) -> f s -> Supply
-supply1gen f = getOp $ deciding1 (Proxy :: Proxy Nominal) (Op supply) (Op f)
+supply1gen :: forall n f s. (Num n, IsName n, Deciding1 (Nominal n) f) => (s -> Supply n) -> f s -> Supply n
+supply1gen f = getOp $ deciding1 (Proxy :: Proxy (Nominal n)) (Op supply) (Op f)
 
-class Permutable1 f => Nominal1 f where
-  supp1 :: (s -> Support) -> f s -> Support
-  default supp1 :: Deciding1 Nominal f => (s -> Support) -> f s -> Support
+class Permutable1 n f => Nominal1 n f where
+  supp1 :: (s -> Support n) -> f s -> Support n
+  default supp1 :: Deciding1 (Nominal n) f => (s -> Support n) -> f s -> Support n
   supp1 = supp1gen
 
-  supply1 :: (s -> Supply) -> f s -> Supply
-  default supply1 :: Deciding1 Nominal f => (s -> Supply) -> f s -> Supply
+  supply1 :: Num n => (s -> Supply n) -> f s -> Supply n
+  default supply1 :: (Num n, Deciding1 (Nominal n) f) => (s -> Supply n) -> f s -> Supply n
   supply1 = supply1gen
 
-instance Nominal1 []
-instance Nominal1 Maybe
-instance Nominal1 Proxy
-instance Nominal a => Nominal1 ((,) a)
-instance (Nominal a, Nominal b) => Nominal1 ((,,) a b)
-instance (Nominal a, Nominal b, Nominal c) => Nominal1 ((,,,) a b c)
-instance Nominal a => Nominal1 (Either a)
+instance IsName n => Nominal1 n []
+instance IsName n => Nominal1 n Maybe
+instance IsName n => Nominal1 n Proxy
+instance Nominal n a => Nominal1 n ((,) a)
+instance (Nominal n a, Nominal n b) => Nominal1 n ((,,) a b)
+instance (Nominal n a, Nominal n b, Nominal n c) => Nominal1 n ((,,,) a b c)
+instance Nominal n a => Nominal1 n (Either a)
 
--- (#) :: (Nominal a, Nominal b) => a -> b -> Bool
+-- (#) :: (Nominal n a, Nominal n b) => a -> b -> Bool
 -- a # b = supp a `disjoint` supp b
 
 --------------------------------------------------------------------------------
 -- * Fresh
 --------------------------------------------------------------------------------
 
-class Fresh a where
-  refresh :: Supply -> (a, Supply)
+class Fresh n a where
+  refresh :: Supply n -> (a, Supply n)
 
-fresh :: (Nominal s, Fresh a) => s -> a
-fresh = fst . refresh . supply
+fresh :: forall n s a. (Num n, Nominal n s, Fresh n a) => Proxy n -> s -> a
+fresh Proxy s = fst (refresh (supply s :: Supply n))
 
-instance Fresh Name where
-  refresh (Supply a) = (a, Supply $ a+1)
+instance (Num n, IsName n) => Fresh n (Name n) where
+  refresh (Supply a) = (NameRepr a, Supply $ a+1)
 
-instance Fresh () where
+instance Fresh n () where
   refresh = (,) ()
 
-instance (Fresh a, Fresh b) => Fresh (a, b) where
+instance (Fresh n a, Fresh n b) => Fresh n (a, b) where
   refresh as = case refresh as of
     (a,bs) -> case refresh bs of
       (b,cs) -> ((a,b),cs)
 
-instance (Fresh a, Fresh b, Fresh c) => Fresh (a, b, c) where
+instance (Fresh n a, Fresh n b, Fresh n c) => Fresh n (a, b, c) where
   refresh as = case refresh as of
     (a,bs) -> case refresh bs of
       (b,cs) -> case refresh cs of
         (c,ds) -> ((a,b,c),ds)
 
-instance (Fresh a, Fresh b, Fresh c, Fresh d) => Fresh (a, b, c, d) where
+instance (Fresh n a, Fresh n b, Fresh n c, Fresh n d) => Fresh n (a, b, c, d) where
   refresh as = case refresh as of
     (a,bs) -> case refresh bs of
       (b,cs) -> case refresh cs of
@@ -461,21 +490,21 @@ instance (Fresh a, Fresh b, Fresh c, Fresh d) => Fresh (a, b, c, d) where
 -- * Lifted Fresh
 --------------------------------------------------------------------------------
 
-class Fresh1 f where
-  refresh1 :: (Supply -> (a, Supply)) -> Supply -> (f a, Supply)
+class Fresh1 n f where
+  refresh1 :: (Supply n -> (a, Supply n)) -> Supply n -> (f a, Supply n)
 
-instance Fresh a => Fresh1 ((,) a) where
+instance Fresh n a => Fresh1 n ((,) a) where
   refresh1 f as = case refresh as of
     (a,bs) -> case f bs of
       (b,cs) -> ((a,b),cs)
 
-instance (Fresh a, Fresh b) => Fresh1 ((,,) a b) where
+instance (Fresh n a, Fresh n b) => Fresh1 n ((,,) a b) where
   refresh1 f as = case refresh as of
     (a,bs) -> case refresh bs of
       (b,cs) -> case f cs of
          (c,ds) -> ((a,b,c),ds)
 
-instance (Fresh a, Fresh b, Fresh c) => Fresh1 ((,,,) a b c) where
+instance (Fresh n a, Fresh n b, Fresh n c) => Fresh1 n ((,,,) a b c) where
   refresh1 f as = case refresh as of
     (a,bs) -> case refresh bs of
       (b,cs) -> case refresh cs of
@@ -495,12 +524,12 @@ instance (Fresh a, Fresh b, Fresh c) => Fresh1 ((,,,) a b c) where
 -- supp (a <> b) ⊆ (supp a <> supp b)
 -- @
 --
-class (Nominal a, Semigroup a) => NominalSemigroup a where
-instance NominalSemigroup Set
-instance NominalSemigroup Permutation
+class (Nominal n a, Semigroup a) => NominalSemigroup n a where
+instance IsName n => NominalSemigroup n (Set n)
+instance IsName n => NominalSemigroup n (Permutation n)
 
-instance (NominalSemigroup a, NominalSemigroup b) => NominalSemigroup (a, b)
-instance NominalSemigroup Support
+instance (NominalSemigroup n a, NominalSemigroup n b) => NominalSemigroup n (a, b)
+instance IsName n => NominalSemigroup n (Support n)
 
 --------------------------------------------------------------------------------
 -- * Nominal Monoids
@@ -512,90 +541,91 @@ instance NominalSemigroup Support
 -- perm p mempty = mempty
 -- supp mempty = mempty -- mempty has empty support
 -- @
-class (NominalSemigroup a, Monoid a) => NominalMonoid a
-instance NominalMonoid Permutation
-instance NominalMonoid Set
-instance (NominalMonoid a, NominalMonoid b) => NominalMonoid (a, b)
+class (NominalSemigroup n a, Monoid a) => NominalMonoid n a
+instance IsName n => NominalMonoid n (Permutation n)
+instance IsName n => NominalMonoid n (Set n)
+instance (NominalMonoid n a, NominalMonoid n b) => NominalMonoid n (a, b)
 
 -- TODO: Nominal lattices, etc?
 
+-- -}
 --------------------------------------------------------------------------------
 -- * GHC Generics Support
 --------------------------------------------------------------------------------
 
-class GPermutable f where
-  gtrans :: Name -> Name -> f a -> f a
-  gperm :: Permutation -> f a -> f a
+class GPermutable n f where
+  gtrans :: Name n -> Name n -> f a -> f a
+  gperm :: Permutation n -> f a -> f a
 
-instance Permutable c => GPermutable (K1 i c) where
+instance Permutable n c => GPermutable n (K1 i c) where
   gtrans i j (K1 a) = K1 (trans i j a)
   gperm p (K1 a) = K1 (perm p a)
 
-instance GPermutable f => GPermutable (M1 i c f) where
+instance GPermutable n f => GPermutable n (M1 i c f) where
   gtrans i j (M1 a) = M1 (gtrans i j a)
   gperm p (M1 a) = M1 (gperm p a)
 
-instance GPermutable V1 where
+instance GPermutable n V1 where
   gtrans _ _ !v = case v of {}
   gperm _ !v = case v of {}
 
-instance GPermutable U1 where
+instance GPermutable n U1 where
   gtrans _ _ U1 = U1
   gperm _ U1 = U1
 
-instance (GPermutable f, GPermutable g) => GPermutable (f :*: g) where
+instance (GPermutable n f, GPermutable n g) => GPermutable n (f :*: g) where
   gtrans i j (a :*: b) = gtrans i j a :*: gtrans i j b
   gperm p (a :*: b) = gperm p a :*: gperm p b
 
-instance (GPermutable f, GPermutable g) => GPermutable (f :+: g) where
+instance (GPermutable n f, GPermutable n g) => GPermutable n (f :+: g) where
   gtrans i j (L1 a) = L1 (gtrans i j a)
   gtrans i j (R1 a) = R1 (gtrans i j a)
   gperm p (L1 a) = L1 (gperm p a)
   gperm p (R1 a) = R1 (gperm p a)
 
-instance (Permutable1 f, GPermutable g) => GPermutable (f :.: g) where
+instance (Permutable1 n f, GPermutable n g) => GPermutable n (f :.: g) where
   gtrans i j (Comp1 a) = Comp1 (trans1 gtrans i j a)
   gperm p (Comp1 a) = Comp1 (perm1 gperm p a)
 
-class GPermutable1 f where
-  gtrans1 :: (Name -> Name -> a -> a) -> Name -> Name -> f a -> f a
-  gperm1 :: (Permutation -> a -> a) -> Permutation -> f a -> f a
+class GPermutable1 n f where
+  gtrans1 :: (Name n -> Name n -> a -> a) -> Name n -> Name n -> f a -> f a
+  gperm1 :: (Permutation n -> a -> a) -> Permutation n -> f a -> f a
 
-instance Permutable c => GPermutable1 (K1 i c) where
+instance Permutable n c => GPermutable1 n (K1 i c) where
   gtrans1 _ i j (K1 a) = K1 (trans i j a)
   gperm1 _ p (K1 a) = K1 (perm p a)
 
-instance GPermutable1 f => GPermutable1 (M1 i c f) where
+instance GPermutable1 n f => GPermutable1 n (M1 i c f) where
   gtrans1 f i j (M1 a) = M1 (gtrans1 f i j a)
   gperm1 f p (M1 a) = M1 (gperm1 f p a)
 
-instance GPermutable1 V1 where
+instance GPermutable1 n V1 where
   gtrans1 _ _ _ !v = case v of {}
   gperm1 _ _ !v = case v of {}
 
-instance GPermutable1 U1 where
+instance GPermutable1 n U1 where
   gtrans1 _ _ _ U1 = U1
   gperm1 _ _ U1 = U1
 
-instance (GPermutable1 f, GPermutable1 g) => GPermutable1 (f :*: g) where
+instance (GPermutable1 n f, GPermutable1 n g) => GPermutable1 n (f :*: g) where
   gtrans1 f i j (a :*: b) = gtrans1 f i j a :*: gtrans1 f i j b
   gperm1 f p (a :*: b) = gperm1 f p a :*: gperm1 f p b
 
-instance (GPermutable1 f, GPermutable1 g) => GPermutable1 (f :+: g) where
+instance (GPermutable1 n f, GPermutable1 n g) => GPermutable1 n (f :+: g) where
   gtrans1 f i j (L1 a) = L1 (gtrans1 f i j a)
   gtrans1 f i j (R1 a) = R1 (gtrans1 f i j a)
   gperm1 f p (L1 a) = L1 (gperm1 f p a)
   gperm1 f p (R1 a) = R1 (gperm1 f p a)
 
-instance (Permutable1 f, GPermutable1 g) => GPermutable1 (f :.: g) where
+instance (Permutable1 n f, GPermutable1 n g) => GPermutable1 n (f :.: g) where
   gtrans1 f i j (Comp1 a) = Comp1 (trans1 (gtrans1 f) i j a)
   gperm1 f p (Comp1 a) = Comp1 (perm1 (gperm1 f) p a)
 
-instance GPermutable1 Par1 where
+instance GPermutable1 n Par1 where
   gtrans1 f i j (Par1 a) = Par1 (f i j a)
   gperm1 f p (Par1 a) = Par1 (f p a)
 
-instance Permutable1 f => GPermutable1 (Rec1 f) where
+instance Permutable1 n f => GPermutable1 n (Rec1 f) where
   gtrans1 f i j (Rec1 a) = Rec1 (trans1 f i j a)
   gperm1 f p (Rec1 a) = Rec1 (perm1 f p a)
 
@@ -603,18 +633,18 @@ instance Permutable1 f => GPermutable1 (Rec1 f) where
 -- * Computing permutations from perm-sets
 --------------------------------------------------------------------------------
 
-data Binder a = Binder { getBinder :: a -> a -> Maybe Permutation }
+newtype Binder n a = Binder { getBinder :: a -> a -> Maybe (Permutation n) }
 
-instance Contravariant Binder where
+instance Contravariant (Binder n) where
   contramap f (Binder g) = Binder $ \x y -> g (f x) (f y)
 
-instance Divisible Binder where
+instance IsName n => Divisible (Binder n) where
   conquer = Binder $ \ _ _ -> Just mempty
   divide f (Binder g) (Binder h) = Binder $ \x y -> case f x of
     (b, c) -> case f y of
        (d, e) -> (<>) <$> g b d <*> h c e
 
-instance Decidable Binder where
+instance IsName n => Decidable (Binder n) where
   lose f = Binder $ absurd . f
   choose f (Binder g) (Binder h) = Binder $ \x y -> case f x of
     Left b -> case f x of
@@ -629,65 +659,65 @@ instance Decidable Binder where
 --------------------------------------------------------------------------------
 
 -- assumption: all variables in a binding are distinct
-class Nominal a => Binding a where
-  binding :: a -> a -> Maybe Permutation
-  default binding :: Deciding Binding a => a -> a -> Maybe Permutation
-  binding a b = getBinder (deciding (Proxy :: Proxy Binding) (Binder binding)) a b
+class Nominal n a => Binding n a where
+  binding :: a -> a -> Maybe (Permutation n)
+  default binding :: Deciding (Binding n) a => a -> a -> Maybe (Permutation n)
+  binding a b = getBinder (deciding (Proxy :: Proxy (Binding n)) (Binder binding)) a b
 
-  bv :: a -> Set
-  default bv :: Deciding Binding a => a -> Set
-  bv = getOp $ deciding (Proxy :: Proxy Binding) $ Op bv
+  bv :: a -> Set n
+  default bv :: Deciding (Binding n) a => a -> Set n
+  bv = getOp $ deciding (Proxy :: Proxy (Binding n)) $ Op bv
 
-instance Binding Name where
+instance IsName n => Binding n (Name n) where
   binding a b = Just (swap a b)
   bv = Set.singleton
 
-instance Binding () where
+instance IsName n => Binding n () where
   binding _ _ = Just mempty
   bv = mempty
 
-instance Binding Void where
+instance IsName n => Binding n Void where
   binding = absurd
   bv = absurd
 
-instance Binding Int where
+instance IsName n => Binding n Int where
   binding a b = mempty <$ guard (a == b)
   bv = mempty
 
-instance Binding Bool where
+instance IsName n => Binding n Bool where
   binding a b = mempty <$ guard (a == b)
   bv = mempty
 
-instance Binding Char where
+instance IsName n => Binding n Char where
   binding a b = mempty <$ guard (a == b)
   bv = mempty
 
-instance (Binding a, Binding b) => Binding (a, b)
-instance (Binding a, Binding b, Binding c) => Binding (a, b, c)
-instance (Binding a, Binding b, Binding c, Binding d) => Binding (a, b, c, d)
-instance (Binding a, Binding b) => Binding (Either a b)
-instance Binding a => Binding (Maybe a)
-instance Binding a => Binding [a]
+instance (Binding n a, Binding n b) => Binding n (a, b)
+instance (Binding n a, Binding n b, Binding n c) => Binding n (a, b, c)
+instance (Binding n a, Binding n b, Binding n c, Binding n d) => Binding n (a, b, c, d)
+instance (Binding n a, Binding n b) => Binding n (Either a b)
+instance Binding n a => Binding n (Maybe a)
+instance Binding n a => Binding n [a]
 
 --------------------------------------------------------------------------------
 -- * Lifted Bindings
 --------------------------------------------------------------------------------
 
-class Nominal1 f => Binding1 f where
-  binding1 :: (a -> a -> Maybe Permutation) -> f a -> f a -> Maybe Permutation
-  default binding1 :: Deciding1 Binding f => (a -> a -> Maybe Permutation) -> f a -> f a -> Maybe Permutation
-  binding1 f a b = getBinder (deciding1 (Proxy :: Proxy Binding) (Binder binding) (Binder f)) a b
+class Nominal1 n f => Binding1 n f where
+  binding1 :: (a -> a -> Maybe (Permutation n)) -> f a -> f a -> Maybe (Permutation n)
+  default binding1 :: Deciding1 (Binding n) f => (a -> a -> Maybe (Permutation n)) -> f a -> f a -> Maybe (Permutation n)
+  binding1 f a b = getBinder (deciding1 (Proxy :: Proxy (Binding n)) (Binder binding) (Binder f)) a b
 
-  bv1 :: (a -> Set) -> f a -> Set
-  default bv1 :: Deciding1 Binding f => (a -> Set) -> f a -> Set
-  bv1 f = getOp $ deciding1 (Proxy :: Proxy Binding) (Op bv) (Op f)
+  bv1 :: (a -> Set n) -> f a -> Set n
+  default bv1 :: Deciding1 (Binding n) f => (a -> Set n) -> f a -> Set n
+  bv1 f = getOp $ deciding1 (Proxy :: Proxy (Binding n)) (Op bv) (Op f)
 
-instance Binding a => Binding1 (Either a)
-instance Binding a => Binding1 ((,) a)
-instance (Binding a, Binding b) => Binding1 ((,,) a b)
-instance (Binding a, Binding b, Binding c) => Binding1 ((,,,) a b c)
-instance Binding1 []
-instance Binding1 Maybe
+instance Binding n a => Binding1 n (Either a)
+instance Binding n a => Binding1 n ((,) a)
+instance (Binding n a, Binding n b) => Binding1 n ((,,) a b)
+instance (Binding n a, Binding n b, Binding n c) => Binding1 n ((,,,) a b c)
+instance IsName n => Binding1 n []
+instance IsName n => Binding1 n Maybe
 
 -- things that would need [Permutation]:
 -- Binding Set isn't really possible, it'd need to give back several possible matchings, using, say, [Permutation]
@@ -700,70 +730,70 @@ instance Binding1 Maybe
 -- * Irrefutable Matches
 --------------------------------------------------------------------------------
 
-class Binding a => Irrefutable a where
-  match :: a -> a -> Permutation
+class (IsName n, Binding n a) => Irrefutable n a where
+  match :: a -> a -> Permutation n
 
-instance Irrefutable Name where
+instance IsName n => Irrefutable n (Name n) where
   match = swap -- TODO: move this far enough upstream so that match _is_ swap?
 
-instance Irrefutable Void where
+instance IsName n => Irrefutable n Void where
   match = absurd
 
-instance Irrefutable () where
+instance IsName n => Irrefutable n () where
   match _ _ = mempty
 
-instance (Irrefutable a, Irrefutable b) => Irrefutable (a, b) where
+instance (Irrefutable n a, Irrefutable n b) => Irrefutable n (a, b) where
   match (a,b) (c,d) = match a c <> match b d
 
-instance (Irrefutable a, Irrefutable b, Irrefutable c) => Irrefutable (a, b, c) where
+instance (Irrefutable n a, Irrefutable n b, Irrefutable n c) => Irrefutable n (a, b, c) where
   match (a,b,c) (d,e,f) = match a d <> match b e <> match c f
 
-instance (Irrefutable a, Irrefutable b, Irrefutable c, Irrefutable d) => Irrefutable (a, b, c, d) where
+instance (Irrefutable n a, Irrefutable n b, Irrefutable n c, Irrefutable n d) => Irrefutable n (a, b, c, d) where
   match (a,b,c,d) (e,f,g,h) = match a e <> match b f <> match c g <> match d h
 
 --------------------------------------------------------------------------------
 -- * Lifted Irrefutable Matches
 --------------------------------------------------------------------------------
 
-class Binding1 f => Irrefutable1 f where
-  match1 :: (a -> a -> Permutation) -> f a -> f a -> Permutation
+class Binding1 n f => Irrefutable1 n f where
+  match1 :: (a -> a -> Permutation n) -> f a -> f a -> Permutation n
 
-instance (Irrefutable a) => Irrefutable1 ((,) a) where
+instance (Irrefutable n a) => Irrefutable1 n ((,) a) where
   match1 f (a,b) (c,d) = match a c <> f b d
 
-instance (Irrefutable a, Irrefutable b) => Irrefutable1 ((,,) a b) where
+instance (Irrefutable n a, Irrefutable n b) => Irrefutable1 n ((,,) a b) where
   match1 g (a,b,c) (d,e,f) = match a d <> match b e <> g c f
 
-instance (Irrefutable a, Irrefutable b, Irrefutable c) => Irrefutable1 ((,,,) a b c) where
+instance (Irrefutable n a, Irrefutable n b, Irrefutable n c) => Irrefutable1 n ((,,,) a b c) where
   match1 i (a,b,c,d) (e,f,g,h) = match a e <> match b f <> match c g <> i d h
 
 --------------------------------------------------------------------------------
 -- * Basic Support
 --------------------------------------------------------------------------------
 
-class Nominal a => Basic a
+class Nominal n a => Basic n a
 
-instance Basic Void
-instance Basic ()
-instance Basic Bool
-instance Basic Char
-instance Basic Int
-instance Basic a => Basic [a]
-instance Basic a => Basic (Maybe a)
-instance (Basic a, Basic b) => Basic (Either a b)
-instance (Basic a, Basic b) => Basic (a, b)
-instance (Basic a, Basic b, Basic c) => Basic (a, b, c)
-instance (Basic a, Basic b, Basic c, Basic d) => Basic (a, b, c, d)
+instance IsName n => Basic n Void
+instance IsName n => Basic n ()
+instance IsName n => Basic n Bool
+instance IsName n => Basic n Char
+instance IsName n => Basic n Int
+instance Basic n a => Basic n [a]
+instance Basic n a => Basic n (Maybe a)
+instance (Basic n a, Basic n b) => Basic n (Either a b)
+instance (Basic n a, Basic n b) => Basic n (a, b)
+instance (Basic n a, Basic n b, Basic n c) => Basic n (a, b, c)
+instance (Basic n a, Basic n b, Basic n c, Basic n d) => Basic n (a, b, c, d)
 
 --------------------------------------------------------------------------------
 -- * Lifted Basic Support
 --------------------------------------------------------------------------------
 
-class Nominal1 f => Basic1 f
+class Nominal1 n f => Basic1 n f
 
-instance Basic1 []
-instance Basic1 Maybe
-instance Basic a => Basic1 (Either a)
-instance Basic a => Basic1 ((,) a)
-instance (Basic a, Basic b) => Basic1 ((,,) a b)
-instance (Basic a, Basic b, Basic c) => Basic1 ((,,,) a b c)
+instance IsName n => Basic1 n []
+instance IsName n => Basic1 n Maybe
+instance Basic n a => Basic1 n (Either a)
+instance Basic n a => Basic1 n ((,) a)
+instance (Basic n a, Basic n b) => Basic1 n ((,,) a b)
+instance (Basic n a, Basic n b, Basic n c) => Basic1 n ((,,,) a b c)
