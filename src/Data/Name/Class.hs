@@ -30,6 +30,7 @@ module Data.Name.Class
 , Basic, Basic1
 , Supply(..), suppgen, equivgen, sepgen, supplysupp, supplygen
 , Fresh(..), Fresh1(..), fresh
+, defaultFmap
 -- , (#), support
 , NominalSemigroup, NominalMonoid
 -- * Generics
