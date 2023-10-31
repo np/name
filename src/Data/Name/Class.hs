@@ -254,8 +254,8 @@ newtype Supply n = Supply {getSupply :: n} deriving Generic
 instance Ord n => Semigroup (Supply n) where
   Supply a <> Supply b = Supply (max a b)
 
-instance (IsName n, Num n) => Monoid (Supply n) where
-  mempty = Supply 0
+instance (IsName n, Enum n) => Monoid (Supply n) where
+  mempty = Supply (toEnum 0)
 
 {-
 instance Permutable (Supply n) where
@@ -299,12 +299,12 @@ equivgen :: forall n s. Deciding (Nominal n) s => s -> Name n -> Name n -> Bool
 equivgen s i j = getPredicate (deciding (Proxy :: Proxy (Nominal n)) (Predicate (\s' -> equiv s' i j))) s
 {-# inline equivgen #-}
 
-supplygen :: forall n s. (IsName n, Num n, Deciding (Nominal n) s) => s -> Supply n
+supplygen :: forall n s. (IsName n, Enum n, Deciding (Nominal n) s) => s -> Supply n
 supplygen = getOp $ deciding (Proxy :: Proxy (Nominal n)) (Op supply)
 
 -- fast if you have O(1) support
-supplysupp :: Num n => Nominal n s => s -> Supply n
-supplysupp (supp -> Supp s) = Supply . maybe 0 ((1+) . _nameRepr) $ sup s
+supplysupp :: Enum n => Nominal n s => s -> Supply n
+supplysupp (supp -> Supp s) = Supply . maybe (toEnum 0) (succ . _nameRepr) $ sup s
 
 class Permutable n s => Nominal n s where
 
@@ -341,8 +341,8 @@ class Permutable n s => Nominal n s where
   supp = suppgen
   {-# inline supp #-}
 
-  supply :: Num n => s -> Supply n
-  default supply :: (Num n, Deciding (Nominal n) s) => s -> Supply n
+  supply :: Enum n => s -> Supply n
+  default supply :: (Enum n, Deciding (Nominal n) s) => s -> Supply n
   supply = supplygen
   {-# inline supply #-}
 
@@ -366,7 +366,7 @@ instance IsName n => Nominal n (Support n) where
 
 instance IsName n => Nominal n (Name n) where
   equiv a b c = (a == b) == (a == c)
-  supply (NameRepr i) = Supply $ i+1
+  supply (NameRepr i) = Supply $ succ i
   (#) = (/=)
   supp n = Supp (Trie.singleton n ())
 
@@ -429,7 +429,7 @@ instance IsName n => Nominal n Word where
 supp1gen :: forall n f s. (IsName n, Deciding1 (Nominal n) f) => (s -> Support n) -> f s -> Support n
 supp1gen f = getSupported $ deciding1 (Proxy :: Proxy (Nominal n)) (Supported supp) (Supported f)
 
-supply1gen :: forall n f s. (Num n, IsName n, Deciding1 (Nominal n) f) => (s -> Supply n) -> f s -> Supply n
+supply1gen :: forall n f s. (Enum n, IsName n, Deciding1 (Nominal n) f) => (s -> Supply n) -> f s -> Supply n
 supply1gen f = getOp $ deciding1 (Proxy :: Proxy (Nominal n)) (Op supply) (Op f)
 
 class Permutable1 n f => Nominal1 n f where
@@ -437,8 +437,8 @@ class Permutable1 n f => Nominal1 n f where
   default supp1 :: Deciding1 (Nominal n) f => (s -> Support n) -> f s -> Support n
   supp1 = supp1gen
 
-  supply1 :: Num n => (s -> Supply n) -> f s -> Supply n
-  default supply1 :: (Num n, Deciding1 (Nominal n) f) => (s -> Supply n) -> f s -> Supply n
+  supply1 :: Enum n => (s -> Supply n) -> f s -> Supply n
+  default supply1 :: (Enum n, Deciding1 (Nominal n) f) => (s -> Supply n) -> f s -> Supply n
   supply1 = supply1gen
 
 instance IsName n => Nominal1 n []
@@ -459,11 +459,11 @@ instance Nominal n a => Nominal1 n (Either a)
 class Fresh n a where
   refresh :: Supply n -> (a, Supply n)
 
-fresh :: forall n s a. (Num n, Nominal n s, Fresh n a) => Proxy n -> s -> a
+fresh :: forall n s a. (Enum n, Nominal n s, Fresh n a) => Proxy n -> s -> a
 fresh Proxy s = fst (refresh (supply s :: Supply n))
 
-instance (Num n, IsName n) => Fresh n (Name n) where
-  refresh (Supply a) = (NameRepr a, Supply $ a+1)
+instance (Enum n, IsName n) => Fresh n (Name n) where
+  refresh (Supply a) = (NameRepr a, Supply $ succ a)
 
 instance Fresh n () where
   refresh = (,) ()

@@ -7,7 +7,7 @@ import Control.Lens (Contravariant(..))
 import Data.Coerce (coerce)
 import Data.Name.Class (IsName)
 
-newtype NatNameRepr = NatNameRepr Natural deriving (Eq,Num,Ord)
+newtype NatNameRepr = NatNameRepr Natural deriving (Eq,Enum,Ord)
 
 instance Grouping NatNameRepr where
   grouping = contramap coerce (grouping :: Group Natural)

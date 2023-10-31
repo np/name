@@ -20,7 +20,7 @@ import Data.Coerce (coerce)
 -- By design, a `Name` is meant to support the minimum amount of instances.
 -- It has `Eq` and `Grouping`.
 -- It has `Show` for debugging.
--- Its representation might have `Ord`, `Hashable`, `Num`...
+-- Its representation might have `Ord`, `Hashable`, `Enum`...
 newtype Name n = NameRepr { _nameRepr :: n }
   deriving (Eq, Show)
 

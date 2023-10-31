@@ -89,7 +89,7 @@ coziptie = niso (mempty :: Support n) f g where
 delta :: forall n k a b c. NI n k => k (Tie n a (Tie n b c)) (Tie n b (Tie n a c))
 delta = niso (mempty :: Support n) (\(Tie a (Tie b c)) -> Tie b (Tie a c)) (\(Tie a (Tie b c)) -> Tie b (Tie a c))
 
-kappa :: forall n k a b. (N n k, Num n, Nominal n a, Fresh n b) => k a (Tie n b a)
+kappa :: forall n k a b. (N n k, Enum n, Nominal n a, Fresh n b) => k a (Tie n b a)
 kappa = nom (mempty :: Support n) $ \x -> Tie (fresh (Proxy :: Proxy n) x) x
 
 -- side condition: a # b
@@ -116,13 +116,13 @@ pi2 = nom (mempty :: Support n) $ \ (Untie _ b) -> b
 
 -- this requires a 'fresh', what subset of irrefutable definitions match here?
 
-unit :: forall n k a b. (Num n, N n k, Nominal n a, Fresh n b) => k a (Tie n b (Untie n a b))
+unit :: forall n k a b. (Enum n, N n k, Nominal n a, Fresh n b) => k a (Tie n b (Untie n a b))
 unit = nom (mempty :: Support n) $ \ a -> let b = fresh (Proxy :: Proxy n) a in Tie b (Untie a b)
 
 counit :: forall n k a b. (N n k, Permutable n a, Irrefutable n b) => k (Untie n (Tie n b a) b) a
 counit = nom (mempty :: Support n) $ \(Untie (Tie d a) c) -> perm (match c d :: Permutation n) a
 
-leftAdjunct :: forall n k a b c. (Num n, N n k, Nominal n a, Fresh n c) => k (Untie n a c) b -> k a (Tie n c b)
+leftAdjunct :: forall n k a b c. (Enum n, N n k, Nominal n a, Fresh n c) => k (Untie n a c) b -> k a (Tie n c b)
 leftAdjunct = nar (Proxy :: Proxy n) $ \f y ->
    let a = fresh (Proxy :: Proxy n) y
    in Tie a (f (Untie y a))
