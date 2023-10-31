@@ -463,8 +463,8 @@ instance Nominal n a => Nominal1 n (Either a)
 class Fresh n a where
   refresh :: Supply n -> (a, Supply n)
 
-fresh :: forall n s a. (Enum n, Nominal n s, Fresh n a) => Proxy n -> s -> a
-fresh Proxy s = fst (refresh (supply s :: Supply n))
+fresh :: forall proxy n s a. (Enum n, Nominal n s, Fresh n a) => proxy n -> s -> a
+fresh _ s = fst (refresh (supply s :: Supply n))
 
 instance (Enum n, IsNameRepr n) => Fresh n (Name n) where
   refresh (Supply a) = (NameRepr a, Supply $ succ a)
