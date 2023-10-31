@@ -667,7 +667,7 @@ instance IsName n => Decidable (Binder n) where
 class Nominal n a => Binding n a where
   binding :: a -> a -> Maybe (Permutation n)
   default binding :: Deciding (Binding n) a => a -> a -> Maybe (Permutation n)
-  binding a b = getBinder (deciding (Proxy :: Proxy (Binding n)) (Binder binding)) a b
+  binding = getBinder (deciding (Proxy :: Proxy (Binding n)) (Binder binding))
 
   bv :: a -> Set n
   default bv :: Deciding (Binding n) a => a -> Set n
