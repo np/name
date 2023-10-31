@@ -157,8 +157,9 @@ instance IsNameRepr n => Permutable n (Support n) where
 
 instance Permutable n a => Permutable n (Trie n a) where
   trans i j s = s
-    & at j .~ s^.at i
-    & at i .~ s^.at j
+   <&> trans i j
+    &  at j .~ s^.at i
+    &  at i .~ s^.at j
   {-# inline trans #-}
   perm p0@(Permutation (Perm p) _) t = ifoldr tweak z p where
     tweak i j s = s & at (NameRepr j) .~ z^.at i
