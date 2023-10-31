@@ -5,7 +5,7 @@ import Data.Discrimination.Grouping
 import Numeric.Natural
 import Control.Lens (Contravariant(..))
 import Data.Coerce (coerce)
-import Data.Name.Class (IsName)
+import Data.Name.Class (IsNameRepr)
 
 newtype NatNameRepr = NatNameRepr Natural deriving (Eq,Enum,Ord)
 
@@ -17,4 +17,4 @@ instance Show NatNameRepr where
   showsPrec d (NatNameRepr n) = showsPrec d n
   {-# inlineable showsPrec #-}
 
-instance IsName NatNameRepr where
+instance IsNameRepr NatNameRepr where

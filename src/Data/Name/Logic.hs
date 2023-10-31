@@ -36,10 +36,10 @@ import Data.Name.Class
 -- this satisfies excluded-middle, etc.
 data Prop n = Finite (Set n) | Cofinite (Set n) deriving (Generic, Eq)
 
-instance IsName n => Permutable n (Prop n)
-instance IsName n => Nominal n (Prop n)
+instance IsNameRepr n => Permutable n (Prop n)
+instance IsNameRepr n => Nominal n (Prop n)
 
-instance IsName n => Semigroup (Prop n)  where
+instance IsNameRepr n => Semigroup (Prop n)  where
   stimes n m = case compare n 0 of
     LT -> neg m
     EQ -> mempty
@@ -52,13 +52,13 @@ instance IsName n => Semigroup (Prop n)  where
   Cofinite p <> Cofinite q = Cofinite (p ∧ q)
   {-# inline (<>) #-}
 
-instance IsName n => Monoid (Prop n) where
+instance IsNameRepr n => Monoid (Prop n) where
   mempty = Finite mempty
 
-instance IsName n => Join (Prop n)
-instance IsName n => BoundedJoin (Prop n)
+instance IsNameRepr n => Join (Prop n)
+instance IsNameRepr n => BoundedJoin (Prop n)
 
-instance IsName n => Meet (Prop n) where
+instance IsNameRepr n => Meet (Prop n) where
   Finite p   ∧ Finite q   = Finite   (p ∧ q) -- pq
   Finite p   ∧ Cofinite q = Finite   (p \\ q) -- p(S-q)=pS-pq=p-q
   Cofinite p ∧ Finite q   = Finite   (q \\ p) -- (S-p)q=Sq-pq=q-pq=q-p
@@ -66,9 +66,9 @@ instance IsName n => Meet (Prop n) where
   -- (S-p)(S-q)=S(S-q)-p(S-q)=SS-Sq-pS-pq=S-q-p-pq=S-q-p=S-(q+p)
   {-# inline (∧) #-}
 
-instance IsName n => DistributiveLattice (Prop n)
+instance IsNameRepr n => DistributiveLattice (Prop n)
 
-instance IsName n => GBA (Prop n) where
+instance IsNameRepr n => GBA (Prop n) where
   -- nominal
   -- @p \\ q = p ∧ neg q@
   Finite p   \\ Finite q   = Finite   (p \\ q)
@@ -85,7 +85,7 @@ instance IsName n => GBA (Prop n) where
   {-# inline xor #-}
 
 -- nominal
-instance IsName n => SetLike (Prop n) where
+instance IsNameRepr n => SetLike (Prop n) where
   member a (Finite s)   = member a s
   member a (Cofinite s) = not (member a s)
   {-# inline member #-}
@@ -102,11 +102,11 @@ instance IsName n => SetLike (Prop n) where
   delete a (Cofinite s) = Cofinite (insert a s)
   {-# inline delete #-}
 
-instance IsName n => BoundedMeet (Prop n) where
+instance IsNameRepr n => BoundedMeet (Prop n) where
   top = Cofinite bottom
   {-# inline conlike top #-}
 
-instance IsName n => Boolean (Prop n) where
+instance IsNameRepr n => Boolean (Prop n) where
   neg (Finite s) = Cofinite s
   neg (Cofinite s) = Finite s
   {-# inline neg #-}
@@ -126,25 +126,25 @@ instance IsName n => Boolean (Prop n) where
 -- instance NominalSemigroup (Prop n)
 -- instance NominalMonoid (Prop n)
 
-instance IsName n => AsEmpty (Prop n) where
+instance IsNameRepr n => AsEmpty (Prop n) where
   _Empty = prism (const (Finite mempty)) $ \case
      Finite Empty -> Right ()
      t -> Left t
   {-# inline _Empty #-}
 
 type instance Index (Prop n) = Name n
-instance IsName n => Contains (Prop n) where
+instance IsNameRepr n => Contains (Prop n) where
   contains a f (Finite s) = Finite <$> contains a f s
   contains a f (Cofinite s) = Cofinite <$> contains a (fmap not . f . not) s
   {-# inline contains #-}
 
 -- lift a unary boolean function
-liftB :: IsName n => (Bool -> Bool) -> Prop n -> Prop n
+liftB :: IsNameRepr n => (Bool -> Bool) -> Prop n -> Prop n
 liftB f !s
   | f False   = if f True then top else neg s
   | otherwise = if f True then s else bottom
 
-table :: IsName n => Fun -> Prop n -> Prop n -> Prop n
+table :: IsNameRepr n => Fun -> Prop n -> Prop n -> Prop n
 table TNever  _ _ = bottom
 table TAnd    f g = f ∧ g
 table TGt     f g = f \\ g -- f > g
@@ -163,7 +163,7 @@ table TNand   f g = neg (f ∧ g) -- ite f (neg g) One  -- nand f g
 table TAlways _ _ = top
 
 -- | lift boolean functions through the table e.g. @liftB2 (&&)@, @liftB2 (<=)@
-liftB2 :: IsName n => (Bool -> Bool -> Bool) -> Prop n -> Prop n -> Prop n
+liftB2 :: IsNameRepr n => (Bool -> Bool -> Bool) -> Prop n -> Prop n -> Prop n
 liftB2 = table . fun
 
 -- instance Bits (Prop n)

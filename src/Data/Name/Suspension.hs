@@ -21,15 +21,15 @@ import Data.Name.Permutation
 data Suspended n a = Suspended (Permutation n) a
   deriving (Functor, Foldable, Traversable)
 
-instance IsName n => Applicative (Suspended n) where
+instance IsNameRepr n => Applicative (Suspended n) where
   pure = Suspended mempty
   Suspended mf f <*> Suspended ma a = Suspended (mf <> ma) (f a)
 
-instance IsName n => Monad (Suspended n) where
+instance IsNameRepr n => Monad (Suspended n) where
   Suspended ma a >>= k = case k a of
     Suspended mb b -> Suspended (ma <> mb) b
 
-instance IsName n => Permutable n (Suspended n a) where
+instance IsNameRepr n => Permutable n (Suspended n a) where
   perm p (Suspended q a) = Suspended (p <> q) a
   trans i j (Suspended q a) = Suspended (swap i j <> q) a
 
@@ -53,5 +53,5 @@ nextract :: Permutable n a => Suspended n a -> a
 nextract (Suspended p a) = perm p a
 
 -- Suspended should be a nominal comonad
-nduplicate :: IsName n => Suspended n a -> Suspended n (Suspended n a)
+nduplicate :: IsNameRepr n => Suspended n a -> Suspended n (Suspended n a)
 nduplicate (Suspended p a) = Suspended p (Suspended mempty a) -- we can meaningfully 'split' bijections as they don't matter in Nom

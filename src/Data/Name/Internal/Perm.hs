@@ -17,7 +17,7 @@ module Data.Name.Internal.Perm where
 import Control.Lens
 import Control.Monad
 import Data.Maybe
-import Data.Name.Internal.IsName
+import Data.Name.Internal.IsNameRepr
 import Data.Name.Internal.Trie
 import Prelude hiding (elem, lookup)
 import Data.Name.Type (Name(..))
@@ -32,20 +32,20 @@ The `Ord` instance on `Perm` leaks the `Ord` on `Name` since
 newtype Perm n = Perm { getPerm :: Trie n n }
   deriving (Eq,{-Ord,-}Show)
 
-perm' :: IsName n => Perm n -> Name n -> Name n
+perm' :: IsNameRepr n => Perm n -> Name n -> Name n
 perm' (Perm t) a = maybe a NameRepr $ lookup a t
 
-inv' :: IsName n => Perm n -> Perm n
+inv' :: IsNameRepr n => Perm n -> Perm n
 inv' (Perm x) = Perm $ ifoldr (\(NameRepr a) b -> insert (NameRepr b) a) Empty x
 
-square' :: IsName n => Perm n -> Perm n
+square' :: IsNameRepr n => Perm n -> Perm n
 square' (Perm t) = Perm $ ifilterMap go t where
   go (NameRepr i) j = mfilter (i/=) $ lookup (NameRepr j) t -- check this
 
 sup' :: Perm n -> Maybe (Name n)
 sup' (Perm t) = sup t
 
-instance IsName n => Semigroup (Perm n) where
+instance IsNameRepr n => Semigroup (Perm n) where
   --  x       y        z
   --  ----    ----     ------
   --  0->1             0 -> 2
@@ -54,8 +54,8 @@ instance IsName n => Semigroup (Perm n) where
   Perm x <> yt@(Perm y) = Perm $ ifilterMap f $ union (_nameRepr . perm' yt . NameRepr <$> x) y where
     f (NameRepr i) = mfilter (i/=) . pure
 
-elem :: IsName n => Name n -> Lens' (Perm n) n
+elem :: IsNameRepr n => Name n -> Lens' (Perm n) n
 elem i f (Perm s) = Perm <$> at i (non (_nameRepr i) f) s
 
-instance IsName n => Monoid (Perm n) where
+instance IsNameRepr n => Monoid (Perm n) where
   mempty = Perm Empty

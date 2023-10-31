@@ -41,7 +41,7 @@ library
 
   exposed-modules:
     Data.Name
-    Data.Name.Internal.IsName
+    Data.Name.Internal.IsNameRepr
     Data.Name.Internal.Fun
     Data.Name.Internal.Map
     Data.Name.Internal.Perm

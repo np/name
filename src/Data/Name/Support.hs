@@ -65,7 +65,7 @@ import Control.Lens hiding (set, sets)
 import Data.Discrimination.Grouping ( runGroup, Grouping(..) )
 import qualified Data.List as List
 import Data.Name.Lattice ( PartialOrder(..), Meet(..), BoundedJoin(..), Join(..) )
-import Data.Name.Internal.IsName ( IsName )
+import Data.Name.Internal.IsNameRepr ( IsNameRepr )
 import Data.Name.Internal.Trie ( Trie, union, diff, fromDistinctAscList, imerge )
 import Data.Name.Set as Set ( Set(..), disjoint )
 import Data.Void ( Void )
@@ -84,7 +84,7 @@ instance Show n => Show (Support n) where
 
 -- | The finest support compatible with this support
 -- this is a local top
-finest :: IsName n => Support n -> Support n
+finest :: IsNameRepr n => Support n -> Support n
 finest (Supp xs) = Supp (imap const xs)
 
 -- | Fixing N elements, this is the local coarsest partition.
@@ -93,14 +93,14 @@ finest (Supp xs) = Supp (imap const xs)
 coarsest :: Support n -> Set n
 coarsest (Supp xs) = Set xs
 
-sets :: IsName n => Support n -> [Set n]
+sets :: IsNameRepr n => Support n -> [Set n]
 sets (Supp t) = Exts.fromList <$> runGroup grouping (ifoldr (\i a r -> (a, i): r) [] t)
 
-unsets :: IsName n => [Set n] -> Support n
+unsets :: IsNameRepr n => [Set n] -> Support n
 unsets = Supp . ifoldr (\i (Set t) r -> union (i <$ t) r) Empty
 
 -- | Meets compute coarser supports by glomming together partitions
-instance IsName n => Meet (Support n) where
+instance IsNameRepr n => Meet (Support n) where
   xs0 ∧ ys0 = unsets $ go (sets xs0) (sets ys0) where
     go _ [] = []
     go [] ys = ys
@@ -112,16 +112,16 @@ instance IsName n => Meet (Support n) where
 data These a b = This a | That b | These a b deriving (Generic, Eq, Ord, Show, Grouping)
 
 -- | Joins compute finer grained supports on a set of elements
-instance IsName n => Join (Support n) where
+instance IsNameRepr n => Join (Support n) where
   Supp xs ∨ Supp ys = Supp $ imerge (\_ x y -> Just $ These x y) (fmap This) (fmap That) xs ys
 
-instance IsName n => BoundedJoin (Support n) where
-  bottom = Supp (Empty :: IsName n => Trie n Void)
+instance IsNameRepr n => BoundedJoin (Support n) where
+  bottom = Supp (Empty :: IsNameRepr n => Trie n Void)
 
-instance IsName n => Semigroup (Support n) where
+instance IsNameRepr n => Semigroup (Support n) where
   (<>) = (∨)
 
-instance IsName n => Monoid (Support n) where
+instance IsNameRepr n => Monoid (Support n) where
   mempty = bottom
 
 flop :: a -> b -> [(b,a)] -> [(b,a)]
@@ -133,7 +133,7 @@ canonical (Supp xs) = runGroup grouping $ ifoldr flop [] xs
 partitions :: Support n -> [Set n]
 partitions = fmap (Set . fromDistinctAscList . fmap (,())) . canonical
 
-instance IsName n => PartialOrder (Support n) where
+instance IsNameRepr n => PartialOrder (Support n) where
   -- |
   -- @
   -- {{x,y},U-{x,y}} ⊆ {{x,y},{z},U-{x,y,z}}
@@ -149,5 +149,5 @@ instance IsName n => PartialOrder (Support n) where
 instance Eq n => Eq (Support n) where
   (==) = (==) `on` canonical
 
-sans :: IsName n => Support n -> Set n -> Support n
+sans :: IsNameRepr n => Support n -> Set n -> Support n
 sans (Supp xs) (Set ys) = Supp (diff xs ys)

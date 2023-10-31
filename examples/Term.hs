@@ -34,24 +34,24 @@ data Term n
   | NotVar !(Name n)
   deriving (Eq, Show, Generic)
   
-deriving instance IsName n => Permutable n (Term n)
-deriving instance IsName n => Nominal n (Term n)
+deriving instance IsNameRepr n => Permutable n (Term n)
+deriving instance IsNameRepr n => Nominal n (Term n)
 
-instance IsName n => Subst n (Term n) (Name n) where
+instance IsNameRepr n => Subst n (Term n) (Name n) where
   -- Ok if there are no other occurrences of `Name n` in `Term n` than `Var` and `Tie`.
   -- subst _ _ = id
   -- Otherwise this at leasts permutes
   subst _ = perm
 
-instance IsName n => AsName n (Term n) where
+instance IsNameRepr n => AsName n (Term n) where
   _Name = prism Var $ \case
     Var v -> Right v
     x -> Left x
 
-substTerm :: (IsName n, Num n) => Map n (Term n) -> Permutation n -> Term n -> Term n
+substTerm :: (IsNameRepr n, Enum n) => Map n (Term n) -> Permutation n -> Term n -> Term n
 substTerm = subst 
 
-betaReduce :: (Num n, IsName n) => Term n -> Term n
+betaReduce :: (Enum n, IsNameRepr n) => Term n -> Term n
 betaReduce (App (Lam (Tie x t)) u) = substTerm (Map.singleton x u) mempty t
 betaReduce t = t
 

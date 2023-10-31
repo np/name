@@ -69,7 +69,7 @@ import Data.Functor.Classes ( Eq1, Ord1, Show1 )
 import qualified Data.Map as Map
 import Data.Map (Map)
 import Data.Monoid
-import Data.Name.Internal.IsName (IsName)
+import Data.Name.Internal.IsNameRepr (IsNameRepr)
 import GHC.Types
 import Prelude hiding (lookup, length, foldr)
 import Data.Name.Type (Name (..))
@@ -97,40 +97,40 @@ instance TraversableWithIndex (Name n) (Trie n) where
   itraverse f (Trie m) = Trie <$> itraverse (coerce f) m
   {-# inlineable itraverse #-}
 
-insert :: IsName n => Name n -> v -> Trie n v -> Trie n v
+insert :: IsNameRepr n => Name n -> v -> Trie n v -> Trie n v
 insert (NameRepr a) v (Trie m) = Trie (Map.insert a v m)
 {-# inlineable insert #-}
 
-instance (IsName n, Semigroup a) => Semigroup (Trie n a) where
+instance (IsNameRepr n, Semigroup a) => Semigroup (Trie n a) where
   Trie a <> Trie b = Trie (Map.unionWith (<>) a b)
   {-# inlineable (<>) #-}
 
-instance (IsName n, Semigroup a) => Monoid (Trie n a) where
+instance (IsNameRepr n, Semigroup a) => Monoid (Trie n a) where
   mempty = Trie mempty
   {-# inlineable mempty #-}
 
-unionWith :: IsName n => (a -> a -> a) -> Trie n a -> Trie n a -> Trie n a
+unionWith :: IsNameRepr n => (a -> a -> a) -> Trie n a -> Trie n a -> Trie n a
 unionWith f (Trie a) (Trie b) = Trie $ Map.unionWith f a b
 {-# inlineable unionWith #-}
 
-unionWithKey :: IsName n => (Name n -> a -> a -> a) -> Trie n a -> Trie n a -> Trie n a
+unionWithKey :: IsNameRepr n => (Name n -> a -> a -> a) -> Trie n a -> Trie n a -> Trie n a
 unionWithKey f (Trie a) (Trie b) = Trie $ Map.unionWithKey (coerce f) a b
 {-# inlineable unionWithKey #-}
 
-union :: IsName n => Trie n a -> Trie n a -> Trie n a
+union :: IsNameRepr n => Trie n a -> Trie n a -> Trie n a
 union (Trie a) (Trie b) = Trie (Map.union a b)
 {-# inlineable union #-}
 
-intersection :: IsName n => Trie n a -> Trie n b -> Trie n a
+intersection :: IsNameRepr n => Trie n a -> Trie n b -> Trie n a
 intersection (Trie a) (Trie b) = Trie (Map.intersection a b)
 {-# inlineable intersection #-}
 
 -- segfaults
-intersectionWith :: IsName n => (a -> b -> c) -> Trie n a -> Trie n b -> Trie n c
+intersectionWith :: IsNameRepr n => (a -> b -> c) -> Trie n a -> Trie n b -> Trie n c
 intersectionWith f (Trie a) (Trie b) = Trie $ Map.intersectionWith f a b
 {-# inlineable intersectionWith #-}
 
-intersectionWithKey :: IsName n => (Name n -> a -> b -> c) -> Trie n a -> Trie n b -> Trie n c
+intersectionWithKey :: IsNameRepr n => (Name n -> a -> b -> c) -> Trie n a -> Trie n b -> Trie n c
 intersectionWithKey f (Trie a) (Trie b) = Trie $ Map.intersectionWithKey (coerce f) a b
 {-# inlineable intersectionWithKey #-}
 
@@ -158,23 +158,23 @@ ipartition :: (Name n -> a -> Bool) -> Trie n a -> (Trie n a, Trie n a)
 ipartition f (Trie m) = (Trie *** Trie) $ Map.partitionWithKey (f . NameRepr) m
 {-# inlineable ipartition #-}
 
-diff :: IsName n => Trie n a -> Trie n b -> Trie n a
+diff :: IsNameRepr n => Trie n a -> Trie n b -> Trie n a
 diff (Trie m) (Trie n) = Trie (Map.difference m n)
 {-# inlineable diff #-}
 
-delete :: IsName n => Name n -> Trie n v -> Trie n v
+delete :: IsNameRepr n => Name n -> Trie n v -> Trie n v
 delete (NameRepr !k) (Trie m) = Trie (Map.delete k m)
 {-# inlineable delete #-}
 
-(!) :: IsName n => Trie n v -> Name n -> v
+(!) :: IsNameRepr n => Trie n v -> Name n -> v
 (!) (Trie m) (NameRepr a) = m Map.! a
 {-# inlineable (!) #-}
 
-lookup :: IsName n => Name n -> Trie n v -> Maybe v
+lookup :: IsNameRepr n => Name n -> Trie n v -> Maybe v
 lookup (NameRepr a) (Trie m) = Map.lookup a m
 {-# inlineable lookup #-}
 
-member :: IsName n => Name n -> Trie n v -> Bool
+member :: IsNameRepr n => Name n -> Trie n v -> Bool
 member (NameRepr a) (Trie m) = Map.member a m
 {-# inlineable member #-}
 
@@ -183,7 +183,7 @@ singleton :: Name n -> v -> Trie n v
 singleton (NameRepr a) v = Trie (Map.singleton a v)
 {-# inlineable singleton #-}
 
-fromList :: IsName n => [(Name n,v)] -> Trie n v
+fromList :: IsNameRepr n => [(Name n,v)] -> Trie n v
 fromList = Trie . Map.fromList . coerce
 {-# inlineable fromList #-}
 
@@ -197,21 +197,21 @@ empty = Trie Map.empty
 
 type instance Index (Trie n a) = Name n
 type instance IxValue (Trie n a) = a
-instance IsName n => Ixed (Trie n a)
-instance IsName n => At (Trie n a) where
+instance IsNameRepr n => Ixed (Trie n a)
+instance IsNameRepr n => At (Trie n a) where
   at (NameRepr i) f (Trie m) = Trie <$> at i f m
   {-# inline at #-}
 
-instance IsName n => AsEmpty (Trie n a) where
+instance IsNameRepr n => AsEmpty (Trie n a) where
   _Empty = prism (const (Trie mempty)) $ \m -> if null m then Right () else Left m
   {-# inline _Empty #-}
 
-disjoint :: IsName n => Trie n a -> Trie n b -> Bool
+disjoint :: IsNameRepr n => Trie n a -> Trie n b -> Bool
 disjoint m n = null (intersection m n)
 {-# inlineable disjoint #-}
 
 imerge
-  :: IsName n
+  :: IsNameRepr n
   => (n -> a -> b -> Maybe c)
   -> (Trie n a -> Trie n c)
   -> (Trie n b -> Trie n c)
@@ -219,10 +219,10 @@ imerge
 imerge f g h (Trie m) (Trie n) = Trie (Map.mergeWithKey f (coerce g) (coerce h) m n)
 {-# inlineable imerge #-}
 
-isSubtrieOfBy :: IsName n => (a -> b -> Bool) -> Trie n a -> Trie n b -> Bool
+isSubtrieOfBy :: IsNameRepr n => (a -> b -> Bool) -> Trie n a -> Trie n b -> Bool
 isSubtrieOfBy f (Trie a) (Trie b) = Map.isSubmapOfBy f a b
 {-# inlineable isSubtrieOfBy #-}
 
-isSubtrieOf :: (IsName n, Eq a) => Trie n a -> Trie n a -> Bool
+isSubtrieOf :: (IsNameRepr n, Eq a) => Trie n a -> Trie n a -> Bool
 isSubtrieOf (Trie a) (Trie b) = Map.isSubmapOf a b
 {-# inline isSubtrieOf #-}

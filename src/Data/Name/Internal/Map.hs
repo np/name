@@ -41,7 +41,7 @@ union (Map s0a t0a) (Map s0b t0b) = Map (s0a <> s0b) (t0a <> t0b)
 instance NominalSemigroup n a => Semigroup (Map n a) where
   (<>) = union
 
-empty :: IsName n => Map n a
+empty :: IsNameRepr n => Map n a
 empty = Map mempty Empty
 {-# INLINE empty #-}
 
@@ -53,13 +53,13 @@ instance NominalSemigroup n a => NominalSemigroup n (Map n a)
 instance NominalSemigroup n a => NominalMonoid n (Map n a)
 
 -- requires a equivariant morphism, if so, equivariant
-intersectionWith :: IsName n => (a -> b -> c) -> Map n a -> Map n b -> Map n c
+intersectionWith :: IsNameRepr n => (a -> b -> c) -> Map n a -> Map n b -> Map n c
 intersectionWith f (Map s0 t0) (Map s1 t1) = case Trie.intersectionWith f t0 t1 of
   Empty -> empty
   t     -> Map (s0 <> s1) t
 
 -- equivariant
-intersection :: IsName n => Map n a -> Map n a -> Map n a
+intersection :: IsNameRepr n => Map n a -> Map n a -> Map n a
 intersection (Map s0 t0) (Map _ t1) = case Trie.intersection t0 t1 of
   Empty -> empty
   t     -> Map s0 t
@@ -75,21 +75,21 @@ diff (Map s0 t0) (supp -> Supp t1) = case Trie.diff t0 t1 of
 (\\) = diff
 
 -- equivariant
-lookup :: IsName n => Name n -> Map n a -> Maybe a
+lookup :: IsNameRepr n => Name n -> Map n a -> Maybe a
 lookup i (Map _ t) = Trie.lookup i t
 
 -- equivariant
-delete :: IsName n => Name n -> Map n a -> Map n a
+delete :: IsNameRepr n => Name n -> Map n a -> Map n a
 delete i (Map s0 t0) = case Trie.delete i t0 of
   Empty -> empty
   t -> Map s0 t
 
 -- equivariant
-insert :: (IsName n, Nominal n a) => Name n -> a -> Map n a -> Map n a
+insert :: (IsNameRepr n, Nominal n a) => Name n -> a -> Map n a -> Map n a
 insert v a (Map s t) = Map (supp v <> supp a <> s) $ Trie.insert v a t
 
 -- equivariant
-singleton :: (IsName n, Nominal n a) => Name n -> a -> Map n a
+singleton :: (IsNameRepr n, Nominal n a) => Name n -> a -> Map n a
 singleton v a = Map (supp v <> supp a) (Trie.singleton v a)
 
 type instance Index (Map n a) = Name n
@@ -102,7 +102,7 @@ instance Nominal n a => At (Map n a) where
     tweak (Just a,t)  = Map (supp a0 <> supp a <> s0) t
     tweak (Nothing,t) = Map s0 t
 
-instance IsName n => AsEmpty (Map n a) where
+instance IsNameRepr n => AsEmpty (Map n a) where
   _Empty = prism (const empty) $ \case
     Map _ Empty -> Right ()
     t           -> Left t
@@ -111,7 +111,7 @@ instance IsName n => AsEmpty (Map n a) where
 trim :: Nominal n a => Map n a -> Map n a
 trim (Map _ t0) = Map (Supp (void t0) <> foldMap supp t0) t0
 
-instance IsName n => Permutable1 n (Map n) where
+instance IsNameRepr n => Permutable1 n (Map n) where
   perm1 f p (Map s t) = Map (perm p s) (perm1 f p t)
   trans1 f i j (Map s t) = Map (trans i j s) (trans1 f i j t)
 

@@ -118,7 +118,7 @@ instance {-# overlappable #-}
   ) => Subst n e e where
   subst = substexp
 
-instance {-# overlapping #-} IsName n => Subst n (Name n) (Name n) where
+instance {-# overlapping #-} IsNameRepr n => Subst n (Name n) (Name n) where
   subst m p (perm p -> a) = fromMaybe a $ Map.lookup a m
 
 instance (Enum n, Subst n e a, Binding n a, Subst n e b, Nominal n b) => Subst n e (Tie n a b) where
