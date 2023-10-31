@@ -218,8 +218,7 @@ defaultFmap _ f = perm1 (const f) (mempty :: Permutation n)
 "permgen1/mempty=id" [~1] forall f x. permgen1 f (Permutation (Perm (Trie Map.Tip)) x) = id
   #-}
 
--- Could also be called PermutableFunctor
-class (IsNameRepr n, Functor f) => Permutable1 n f where
+class IsNameRepr n => Permutable1 n f where
   trans1 :: (Name n -> Name n -> a -> b) -> Name n -> Name n -> f a -> f b
   default trans1 :: (Generic1 f, GPermutable1 n (Rep1 f)) => (Name n -> Name n -> a -> b) -> Name n -> Name n -> f a -> f b
   trans1 = transgen1
@@ -436,7 +435,6 @@ supp1gen f = getSupported $ deciding1 (Proxy :: Proxy (Nominal n)) (Supported su
 supply1gen :: forall n f s. (Enum n, IsNameRepr n, Deciding1 (Nominal n) f) => (s -> Supply n) -> f s -> Supply n
 supply1gen f = getOp $ deciding1 (Proxy :: Proxy (Nominal n)) (Op supply) (Op f)
 
--- Could also be called NominalFunctor
 class Permutable1 n f => Nominal1 n f where
   supp1 :: (s -> Support n) -> f s -> Support n
   default supp1 :: Deciding1 (Nominal n) f => (s -> Support n) -> f s -> Support n
