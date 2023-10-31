@@ -200,13 +200,16 @@ instance IsName n => Permutable n Word where
 -- * Permutable1
 --------------------------------------------------------------------------------
 
-transgen1 :: (Generic1 f, GPermutable1 n (Rep1 f)) => (Name n -> Name n -> s -> s) -> Name n -> Name n -> f s -> f s
+transgen1 :: (Generic1 f, GPermutable1 n (Rep1 f)) => (Name n -> Name n -> a -> b) -> Name n -> Name n -> f a -> f b
 transgen1 f a b = to1 . gtrans1 f a b . from1
 {-# inline [0] transgen1 #-}
 
-permgen1 :: (Generic1 f, GPermutable1 n (Rep1 f)) => (Permutation n -> s -> s) -> Permutation n -> f s -> f s
+permgen1 :: (Generic1 f, GPermutable1 n (Rep1 f)) => (Permutation n -> a -> b) -> Permutation n -> f a -> f b
 permgen1 f p = to1 . gperm1 f p . from1
 {-# inline [0] permgen1 #-}
+
+defaultFmap :: forall proxy n f a b. (IsName n, Permutable1 n f) => proxy n -> (a -> b) -> f a -> f b
+defaultFmap _ f = perm1 (const f) (mempty :: Permutation n)
 
 {-# RULES
 "transgen1/transgen1/ijij" [~1] forall f i j x. transgen1 f i j (transgen1 f i j x) = x
@@ -215,14 +218,15 @@ permgen1 f p = to1 . gperm1 f p . from1
 "permgen1/mempty=id" [~1] forall f x. permgen1 f (Permutation (Perm (Trie Map.Tip)) x) = id
   #-}
 
-class IsName n => Permutable1 n f where
-  trans1 :: (Name n -> Name n -> s -> s) -> Name n -> Name n -> f s -> f s
-  default trans1 :: (Generic1 f, GPermutable1 n (Rep1 f)) => (Name n -> Name n -> s -> s) -> Name n -> Name n -> f s -> f s
+-- Could also be called PermutableFunctor
+class (IsName n, Functor f) => Permutable1 n f where
+  trans1 :: (Name n -> Name n -> a -> b) -> Name n -> Name n -> f a -> f b
+  default trans1 :: (Generic1 f, GPermutable1 n (Rep1 f)) => (Name n -> Name n -> a -> b) -> Name n -> Name n -> f a -> f b
   trans1 = transgen1
   {-# inline trans1 #-}
 
-  perm1 :: (Permutation n -> s -> s) -> Permutation n -> f s -> f s
-  default perm1 :: (Generic1 f, GPermutable1 n (Rep1 f)) => (Permutation n -> s -> s) -> Permutation n -> f s -> f s
+  perm1 :: (Permutation n -> a -> b) -> Permutation n -> f a -> f b
+  default perm1 :: (Generic1 f, GPermutable1 n (Rep1 f)) => (Permutation n -> a -> b) -> Permutation n -> f a -> f b
   perm1 = permgen1
   {-# inline perm1 #-}
 
@@ -432,6 +436,7 @@ supp1gen f = getSupported $ deciding1 (Proxy :: Proxy (Nominal n)) (Supported su
 supply1gen :: forall n f s. (Enum n, IsName n, Deciding1 (Nominal n) f) => (s -> Supply n) -> f s -> Supply n
 supply1gen f = getOp $ deciding1 (Proxy :: Proxy (Nominal n)) (Op supply) (Op f)
 
+-- Could also be called NominalFunctor
 class Permutable1 n f => Nominal1 n f where
   supp1 :: (s -> Support n) -> f s -> Support n
   default supp1 :: Deciding1 (Nominal n) f => (s -> Support n) -> f s -> Support n
@@ -588,8 +593,8 @@ instance (Permutable1 n f, GPermutable n g) => GPermutable n (f :.: g) where
   gperm p (Comp1 a) = Comp1 (perm1 gperm p a)
 
 class GPermutable1 n f where
-  gtrans1 :: (Name n -> Name n -> a -> a) -> Name n -> Name n -> f a -> f a
-  gperm1 :: (Permutation n -> a -> a) -> Permutation n -> f a -> f a
+  gtrans1 :: (Name n -> Name n -> a -> b) -> Name n -> Name n -> f a -> f b
+  gperm1 :: (Permutation n -> a -> b) -> Permutation n -> f a -> f b
 
 instance Permutable n c => GPermutable1 n (K1 i c) where
   gtrans1 _ i j (K1 a) = K1 (trans i j a)
