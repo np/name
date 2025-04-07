@@ -2,8 +2,9 @@
 # nix develop .#ghc963
 {
   inputs = {
-   #nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
-    nixpkgs.url = "github:np/nixpkgs/45dfae0893d5d5bd0c74fb5cf6d9617829dd7597";
+   #nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+   #nixpkgs.url = "github:np/nixpkgs/45dfae0893d5d5bd0c74fb5cf6d9617829dd7597";
+    nixpkgs.url = "github:NixOS/nixpkgs/release-24.11";
     flake-parts.url = "github:hercules-ci/flake-parts";
     haskell-flake.url = "github:srid/haskell-flake";
     flake-root.url = "github:srid/flake-root";
