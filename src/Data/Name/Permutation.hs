@@ -30,6 +30,7 @@ import Data.Name.Internal.Perm
 import Data.Name.Internal.Trie
 import Data.Name.Internal.IsNameRepr
 import Data.Semigroup
+import Data.Group (Group(invert))
 import Prelude hiding (elem, lookup)
 import Data.Name.Type (Name (..))
 import Data.Function (on)
@@ -54,6 +55,9 @@ instance IsNameRepr n => AsEmpty (Permutation n) where
 
 inv :: Permutation n -> Permutation n
 inv (Permutation s t) = Permutation t s
+
+instance IsNameRepr n => Group (Permutation n) where
+  invert = inv
 
 square :: IsNameRepr n => Permutation n -> Permutation n
 square (Permutation s t) = Permutation (square' s) (square' t)

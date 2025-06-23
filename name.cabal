@@ -27,6 +27,7 @@ library
     contravariant,
     discrimination      >= 0.4,
     fingertree,
+    groups,
     ghc-prim,
     lens,
     primitive,
