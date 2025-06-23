@@ -86,8 +86,8 @@ instance (Permutable n a, Permutable n b) => Nominal n (Nom n a b) where
   supply (Nom s _) = supply s
   equiv (Nom s _) = equiv s
 
-instance Permutable n (k b a) => Permutable n (Op (k :: * -> * -> *) a b)
-instance Nominal n (k b a) => Nominal n (Op (k :: * -> * -> *) a b)
+instance Permutable n (k b a) => Permutable n (Op (k :: Type -> Type -> Type) a b)
+instance Nominal n (k b a) => Nominal n (Op (k :: Type -> Type -> Type) a b)
 
 instance (Permutable n (k a b), Permutable n (k b a)) => Permutable n (Core k a b)
 instance (Nominal n (k a b), Nominal n (k b a)) => Nominal n (Core k a b)
