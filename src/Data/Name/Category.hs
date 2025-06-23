@@ -37,7 +37,7 @@ import Data.Name.Support
 import qualified Prelude
 import Prelude
   ( Either(..)
-  , Eq(..), Ord(..), Show(..), Read(..), Maybe(..), Bool(..), Bounded(..), Enum(..)
+  , Eq(..), Ord(..), Show(..), Read(..), Maybe(..), Bounded(..), Enum(..)
   , ($)
   , Functor(..), (<$>)
   , Foldable(foldMap)
