@@ -1,5 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-module Data.Name.Natural where
+module Data.Name.Repr.Natural where
 
 import Data.Discrimination.Grouping
 import Numeric.Natural

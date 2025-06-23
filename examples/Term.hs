@@ -21,7 +21,7 @@ module Term where
 import Control.Lens
 import GHC.Generics
 import Data.Name
-import Data.Name.Natural
+import Data.Name.Repr.Natural (NatNameRepr)
 import qualified Data.Name.Map as Map
 import Debug.Trace (trace)
 

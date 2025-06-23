@@ -52,7 +52,8 @@ library
     Data.Name.Lattice
     Data.Name.Logic
     Data.Name.Map
-    Data.Name.Natural
+    Data.Name.Repr.Natural
+    Data.Name.Repr.Atom
     Data.Name.Permutation
     Data.Name.Set
     Data.Name.Support
