@@ -47,6 +47,7 @@ import Control.Monad
 import Control.Lens hiding (to, from, (#))
 import Data.Coerce
 import Data.Discrimination.Grouping
+import Data.Functor.Compose (Compose(..))
 import Data.Functor.Contravariant
 import Data.Functor.Contravariant.Divisible
 import Data.Functor.Contravariant.Generic
@@ -238,6 +239,12 @@ instance Permutable n a => Permutable1 n ((,)a)
 instance (Permutable n a, Permutable n b) => Permutable1 n ((,,) a b)
 instance (Permutable n a, Permutable n b, Permutable n c) => Permutable1 n ((,,,) a b c)
 instance Permutable n a => Permutable1 n (Either a)
+
+instance (Permutable1 n f, Permutable1 n g) => Permutable1 n (Compose f g) where
+  trans1 f i j (Compose x) = Compose (trans1 (trans1 f) i j x)
+  {-# inline trans1 #-}
+  perm1 f p (Compose x) = Compose (perm1 (perm1 f) p x)
+  {-# inline perm1 #-}
 
 instance IsNameRepr n => Permutable1 n (Trie n) where
   trans1 f i j s = z
