@@ -19,7 +19,7 @@ import Data.Name.Class
 import Data.Name.Permutation
 
 data Suspended n a = Suspended (Permutation n) a
-  deriving (Functor, Foldable, Traversable)
+  deriving (Functor, Foldable, Traversable, Show)
 
 instance IsNameRepr n => Applicative (Suspended n) where
   pure = Suspended mempty
