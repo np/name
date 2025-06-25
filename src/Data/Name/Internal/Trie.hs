@@ -109,6 +109,9 @@ instance (IsNameRepr n, Semigroup a) => Monoid (Trie n a) where
   mempty = Trie mempty
   {-# inlineable mempty #-}
 
+null :: Trie n a -> Bool
+null (Trie m) = Map.null m
+
 unionWith :: IsNameRepr n => (a -> a -> a) -> Trie n a -> Trie n a -> Trie n a
 unionWith f (Trie a) (Trie b) = Trie $ Map.unionWith f a b
 {-# inlineable unionWith #-}
@@ -203,11 +206,11 @@ instance IsNameRepr n => At (Trie n a) where
   {-# inline at #-}
 
 instance IsNameRepr n => AsEmpty (Trie n a) where
-  _Empty = prism (const (Trie mempty)) $ \m -> if null m then Right () else Left m
+  _Empty = prism (const (Trie mempty)) $ \m -> if Prelude.null m then Right () else Left m
   {-# inline _Empty #-}
 
 disjoint :: IsNameRepr n => Trie n a -> Trie n b -> Bool
-disjoint m n = null (intersection m n)
+disjoint m n = Prelude.null (intersection m n)
 {-# inlineable disjoint #-}
 
 imerge

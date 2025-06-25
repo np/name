@@ -89,6 +89,14 @@ instance IsNameRepr n => Contains (Set n) where
     guard' :: Bool -> Maybe a
     guard' b = undefined <$ guard b
 
+foldMap :: Monoid w => (Name n -> w) -> Set n -> w
+foldMap f (Set t) = ifoldMap (\i _ -> f i) t
+{-# inline foldMap #-}
+
+null :: Set n -> Bool
+null (Set t) = Trie.null t
+{-# inline null #-}
+
 class Contains a => SetLike a where
   insert :: Index a -> a -> a
   insert a = contains a .~ True
