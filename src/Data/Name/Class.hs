@@ -41,6 +41,13 @@ module Data.Name.Class
 -- * Internals
 , Supported(..)
 , Binder(..)
+
+-- * Utils
+, (•)
+, perm1M
+, permSkipId
+, permSkipIdA
+, isIdentityPermutation
 ) where
 
 import Control.Monad
@@ -121,6 +128,10 @@ class IsNameRepr n => Permutable n s where
   default perm :: (Generic s, GPermutable n (Rep s)) => Permutation n -> s -> s
   perm = permgen
   {-# inline perm #-}
+
+(•) :: Permutable n s => Permutation n -> s -> s
+(•) = perm
+{-# inline (•) #-}
 
 instance IsNameRepr n => Permutable n (Name n) where
   trans a b c
@@ -231,6 +242,23 @@ class IsNameRepr n => Permutable1 n f where
   default perm1 :: (Generic1 f, GPermutable1 n (Rep1 f)) => (Permutation n -> a -> b) -> Permutation n -> f a -> f b
   perm1 = permgen1
   {-# inline perm1 #-}
+
+perm1M :: (Monad m, Permutable1 n t, Traversable t) => (Permutation n -> a -> m b) -> Permutation n -> t a -> m (t b)
+perm1M f π = sequenceA . perm1 f π
+
+-- | Efficiently test whether a permutation is the identity.  We implement this
+-- explicitly because the 'Eq' instance for 'Permutation' unnecessarily compares
+-- both fields.
+isIdentityPermutation :: IsNameRepr n => Permutation n -> Bool
+isIdentityPermutation p = _Empty `has` p
+
+permSkipId :: IsNameRepr n => (Permutation n -> a -> a) -> Permutation n -> a -> a
+permSkipId f π a | isIdentityPermutation π = a
+                 | otherwise               = f π a
+
+permSkipIdA :: (IsNameRepr n, Applicative f) => (Permutation n -> a -> f a) -> Permutation n -> a -> f a
+permSkipIdA f π a | isIdentityPermutation π = pure a
+                  | otherwise               = f π a
 
 instance IsNameRepr n => Permutable1 n Proxy
 instance IsNameRepr n => Permutable1 n []
