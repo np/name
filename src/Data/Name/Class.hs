@@ -762,7 +762,7 @@ instance IsNameRepr n => Binding1 n Maybe
 -- things that would need [Permutation]:
 -- Binding Set isn't really possible, it'd need to give back several possible matchings, using, say, [Permutation]
 -- Binding Support is worse
--- Binding Permutatation -- takes permutations to permutations but would need to choose which one of each cycle of the same length was which
+-- Binding Permutation -- takes permutations to permutations but would need to choose which one of each cycle of the same length was which
 -- Binding1 Map
 -- Binding1 Trie
 
