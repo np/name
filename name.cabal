@@ -53,6 +53,7 @@ library
     Data.Name.Logic
     Data.Name.Map
     Data.Name.Repr.Natural
+    Data.Name.Repr.PrefixUnique
     Data.Name.Repr.Atom
     Data.Name.Permutation
     Data.Name.Set
