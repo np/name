@@ -107,6 +107,8 @@ class Contains a => SetLike a where
   singleton a = insert a bottom
   {-# inline singleton #-}
 
+  filter :: (Index a -> Bool) -> a -> a
+
 infixr 6 +>
 
 (+>) :: SetLike a => Index a -> a -> a
@@ -117,6 +119,7 @@ instance IsNameRepr n => SetLike (Set n) where
   delete a (Set t) = Set (Trie.delete a t)
   member a (Set t) = Trie.member a t
   singleton a      = Set (Trie.singleton a ())
+  filter p (Set t) = Set (Trie.ifilter (\k _ -> p k) t)
 
 disjoint :: IsNameRepr n => Set n -> Set n -> Bool
 disjoint (Set a) (Set b) = Trie.disjoint a b
