@@ -15,6 +15,8 @@
 module Data.Name.Permutation
 ( Permutation(..)
 , swap -- generator
+, fromSwaps -- generator from a list of swaps
+, domain -- domain of the permutation
 , rcycles, cycles, cyclic, reassemble -- traditional presentation
 , invert -- invert a permutation
 , parity
@@ -29,6 +31,7 @@ import Data.List (groupBy, sort)
 import Data.Name.Internal.Perm
 import Data.Name.Internal.Trie
 import Data.Name.Internal.IsNameRepr
+import Data.Name.Set (Set(..))
 import Data.Semigroup
 import Data.Group (Group(invert))
 import Prelude hiding (elem, lookup)
@@ -88,6 +91,10 @@ swap i j
   | otherwise = mempty
 {-# inline [0] swap #-}
 
+-- TODO check foldr/foldl
+fromSwaps :: IsNameRepr n => [(Name n, Name n)] -> Permutation n
+fromSwaps = foldr (\(i,j) -> (<> swap i j)) mempty
+
 -- | This is not quite natural order, as its easiest for me to find the largest element and work backwards.
 -- for natural order, reverse the list of cycles. Not a nominal arrow
 rcycles :: IsNameRepr n => Permutation n -> [[Name n]]
@@ -145,3 +152,6 @@ parity = foldr (xor . foldr (const not) True) True . rcycles
 -- | Determinant of the permutation matrix, equivariant
 sign :: IsNameRepr n => Permutation n -> Int
 sign g = (-1) ^ fromEnum (parity g)
+
+domain :: Permutation n -> Set n
+domain (Permutation (Perm t) _) = Set t
