@@ -34,11 +34,11 @@ instance IsNameRepr n => Permutable n (Suspended n a) where
   trans i j (Suspended q a) = Suspended (swap i j <> q) a
 
 instance Nominal n a => Nominal n (Suspended n a) where
-  a # Suspended q b = perm (inv q) a # b
+  a # Suspended q b = perm (invert q) a # b
   supp (Suspended q a) = perm q (supp a)
   supply = supplysupp
   -- supply (Suspended q b) = perm q (supply b)
-  equiv (Suspended (inv -> p) b) i j = equiv b (perm p i) (perm p j)
+  equiv (Suspended (invert -> p) b) i j = equiv b (perm p i) (perm p j)
 
 -- | semi-direct product of a finite permutation and a nominal semigroup
 instance NominalSemigroup n a => Semigroup (Suspended n a) where

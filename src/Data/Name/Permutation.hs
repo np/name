@@ -16,7 +16,7 @@ module Data.Name.Permutation
 ( Permutation(..)
 , swap -- generator
 , rcycles, cycles, cyclic, reassemble -- traditional presentation
-, inv -- invert a permutation
+, invert -- invert a permutation
 , parity
 , sign
 , conjugacyClass
@@ -53,11 +53,8 @@ instance IsNameRepr n => AsEmpty (Permutation n) where
     Permutation (Perm Empty) _ -> Right ()
     t -> Left t
 
-inv :: Permutation n -> Permutation n
-inv (Permutation s t) = Permutation t s
-
 instance IsNameRepr n => Group (Permutation n) where
-  invert = inv
+  invert (Permutation s t) = Permutation t s
 
 square :: IsNameRepr n => Permutation n -> Permutation n
 square (Permutation s t) = Permutation (square' s) (square' t)
@@ -65,7 +62,7 @@ square (Permutation s t) = Permutation (square' s) (square' t)
 instance IsNameRepr n => Semigroup (Permutation n) where
   Permutation a b <> Permutation c d = Permutation (a <> c) (d <> b)
   stimes n x0 = case compare n 0 of
-    LT -> f (inv x0) (negate n)
+    LT -> f (invert x0) (negate n)
     EQ -> mempty
     GT -> f x0 n
     where

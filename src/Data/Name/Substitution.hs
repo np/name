@@ -123,7 +123,7 @@ instance {-# overlapping #-} IsNameRepr n => Subst n (Name n) (Name n) where
 
 instance (Enum n, Subst n e a, Binding n a, Subst n e b, Nominal n b) => Subst n e (Tie n a b) where
   subst m p (Tie a b)
-    | p' <- fst $ Set.foldr step (p, supply (m, p, a, b) :: Supply n) $ bv a /\ perm (inv p) (coarsest (supp m)) -- (m,p,a,b) is conservative but cheap
+    | p' <- fst $ Set.foldr step (p, supply (m, p, a, b) :: Supply n) $ bv a /\ perm (invert p) (coarsest (supp m)) -- (m,p,a,b) is conservative but cheap
     = Tie (subst m p' a) (subst m p' b)
     where step u (x, vs) = case refresh vs of
             (v,vs') -> (swap u v <> x, vs')

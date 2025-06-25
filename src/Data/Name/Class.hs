@@ -135,7 +135,7 @@ instance IsNameRepr n => Permutable n (Name n) where
 instance IsNameRepr n => Permutable n (Permutation n) where
   trans a b t = swap a b <> t <> swap a b
   {-# inline trans #-}
-  perm p t = p <> t <> inv p
+  perm p t = p <> t <> invert p
   {-# inline perm #-}
 
 instance IsNameRepr n => Permutable n (Set n) where
@@ -170,7 +170,7 @@ instance Permutable n a => Permutable n (Trie n a) where
 instance (Permutable n a, Permutable n b) => Permutable n (a -> b) where
   trans a b f = trans a b . f . trans a b
   {-# inline trans #-}
-  perm p f = perm p . f . perm (inv p)
+  perm p f = perm p . f . perm (invert p)
   {-# inline perm #-}
 
 instance (Permutable n a, Permutable n b) => Permutable n (a, b)
